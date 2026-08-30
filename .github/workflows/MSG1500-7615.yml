@@ -23,7 +23,7 @@ jobs:
         sudo apt-get update
         sudo apt-get -y install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd fakeroot \
         cpio git python3-docutils gettext automake autopoint texinfo build-essential help2man \
-        pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget
+        pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget cups-ppdc
         sudo timedatectl set-timezone Asia/Shanghai
     - name: Install UPX
       uses: crazy-max/ghaction-upx@v3
@@ -39,11 +39,6 @@ jobs:
         sh dl_toolchain.sh
         mkdir -p /opt/images/
 
-        ##### 修改内存空间和 storage 空间为 17M
-        sed -i 's/CONFIG_MTD_STORE_PART_SIZ=0x0400000/CONFIG_MTD_STORE_PART_SIZ=0x1100000/' /opt/rt-n56u/trunk/configs/boards/MSG1500-7615/kernel-3.4.x-5.0.config
-        sed -i 's/size_etc="6M"/size_etc="17M"/g' /opt/rt-n56u/trunk/user/scripts/dev_init.sh
-        sed -i 's/size_tmp="24M"/size_tmp="120M"/g' /opt/rt-n56u/trunk/user/scripts/dev_init.sh
-        sed -i 's/mtd_part_size=65536/mtd_part_size=17825792/g' /opt/rt-n56u/trunk/user/scripts/mtd_storage.sh
     - name: Build Firmware
       env:
         TNAME: MSG1500-7615

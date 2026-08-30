@@ -4,16 +4,30 @@ SRC_FILE = $(SRC_NAME)-source.tar.gz
 SRC_URL = https://github.com/OpenPrinting/cups/releases/download/v$(SRC_VER)/$(SRC_FILE)
 SRC_SHA256 = 820984b12a67f98705785aae2dd1347fe0ac097828001d4583ff64574aed6389
 
+BRLASER_VER = 3
+BRLASER_NAME = brlaser-$(BRLASER_VER)
+BRLASER_FILE = $(BRLASER_NAME).tar.gz
+BRLASER_SHA256 = 5f6489599ac9cd7a397ee52608f10febead8ba31f871bd0a33704d61775e0e75
+BRLASER_PATCH = brlaser-uclibc.patch
+BRLASER_BUILD = $(BRLASER_NAME)/build
+BRLASER_PPD = $(BRLASER_BUILD)/ppd
+
 THISDIR = $(shell pwd)
 PKGDIR = $(THISDIR)/install
 
-CUPS_CFLAGS = $(CFLAGS) -ffunction-sections -fdata-sections
+CUPS_CFLAGS = $(CFLAGS) -I$(STAGEDIR)/include/libusb-1.0 -ffunction-sections -fdata-sections
 CUPS_LDFLAGS = $(LDFLAGS) -Wl,--gc-sections,-rpath-link=$(STAGEDIR)/lib
 
-.PHONY: all clean configure download_test extract_test config_test package_test romfs
+.PHONY: all clean configure download_test extract_test config_test package_test package_cups package_brlaser romfs
 
 all: download_test extract_test config_test
-	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME)
+	$(MAKE) -j$(HOST_NCPU) -C $(SRC_NAME) \
+		CFLAGS="$(CUPS_CFLAGS)" \
+		CPPFLAGS="-I$(STAGEDIR)/include" \
+		LDFLAGS="$(CUPS_LDFLAGS)" \
+		LIBS="-lz -lpthread -L$(STAGEDIR)/lib"
+	$(MAKE) package_cups
+	$(MAKE) package_brlaser
 
 download_test:
 	( if ! printf '%s  %s\n' '$(SRC_SHA256)' '$(SRC_FILE)' | sha256sum -c - >/dev/null 2>&1; then \
@@ -25,6 +39,11 @@ download_test:
 extract_test: download_test
 	( if [ ! -d $(SRC_NAME) ]; then \
 		tar zxf $(SRC_FILE); \
+	fi; \
+	if [ ! -d $(BRLASER_NAME) ]; then \
+		echo "$(BRLASER_SHA256)  $(BRLASER_FILE)" | sha256sum -c - && \
+		tar zxf $(BRLASER_FILE) && \
+		patch -d $(BRLASER_NAME) -p1 -i ../$(BRLASER_PATCH); \
 	fi )
 
 config_test: extract_test
@@ -76,7 +95,7 @@ configure:
 		--build=$(HOST_BUILD); \
 	)
 
-package_test: all
+package_cups:
 	rm -rf $(PKGDIR)
 	$(MAKE) -C $(SRC_NAME) install \
 		DESTDIR=$(PKGDIR) \
@@ -94,11 +113,44 @@ package_test: all
 	rm -f $(PKGDIR)/usr/bin/ppdi $(PKGDIR)/usr/bin/ppdmerge
 	rm -f $(PKGDIR)/usr/bin/ppdpo $(PKGDIR)/usr/bin/cupstestppd
 
+package_brlaser:
+	rm -rf $(BRLASER_BUILD)
+	cmake -S $(BRLASER_NAME) -B $(BRLASER_BUILD) \
+		-DCMAKE_SYSTEM_NAME=Linux \
+		-DCMAKE_C_COMPILER=$(CC) \
+		-DCMAKE_CXX_COMPILER=$(CXX) \
+		-DCMAKE_AR=$(AR) \
+		-DCMAKE_RANLIB=$(RANLIB) \
+		-DCMAKE_BUILD_TYPE=MinSizeRel \
+		-DCOMPILER_SUPPORT__fstack_protector_strong=FALSE \
+		-DCMAKE_CXX_FLAGS="$(CFLAGS) -static-libstdc++ -static-libgcc" \
+		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS) -Wl,--gc-sections -static-libstdc++ -static-libgcc -L$(STAGEDIR)/lib" \
+		-DCUPS_DATA_DIR=/usr/share/cups \
+		-DCUPS_SERVER_BIN=/usr/lib/cups \
+		-DCUPS_CFLAGS=-I$(PKGDIR)/usr/include \
+		-DCUPS_LDFLAGS="-L$(PKGDIR)/usr/lib -L$(STAGEDIR)/lib" \
+		-DCUPS_LIBS="-L$(PKGDIR)/usr/lib;-L$(STAGEDIR)/lib;-lcupsimage;-lcups;-lz;-lpthread"
+	$(MAKE) -C $(BRLASER_BUILD) rastertobrlaser
+	$(STRIP) --strip-unneeded $(BRLASER_BUILD)/rastertobrlaser 2>/dev/null || true
+	mkdir -p $(BRLASER_PPD)
+	command -v ppdc >/dev/null 2>&1 || { echo "ppdc is required to generate brlaser PPD files" >&2; exit 1; }
+	ppdc -I $(PKGDIR)/usr/share/cups/ppdc -d $(BRLASER_PPD) $(BRLASER_BUILD)/brlaser.drv
+	test -n "$$(find $(BRLASER_PPD) -type f -name '*.ppd' -print -quit)"
+	mkdir -p $(PKGDIR)/usr/lib/cups/filter $(PKGDIR)/usr/share/cups/drv $(PKGDIR)/usr/share/ppd/Brother
+	install -m 0755 $(BRLASER_BUILD)/rastertobrlaser $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser
+	install -m 0644 $(BRLASER_BUILD)/brlaser.drv $(PKGDIR)/usr/share/cups/drv/brlaser.drv
+	cp -f $(BRLASER_PPD)/*.ppd $(PKGDIR)/usr/share/ppd/Brother/
+
+package_test: all
+	test -x $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser
+	test -n "$$(find $(PKGDIR)/usr/share/ppd/Brother -type f -name '*.ppd' -print -quit)"
+
 clean:
 	if [ -f $(SRC_NAME)/Makefile ]; then \
 		$(MAKE) -C $(SRC_NAME) distclean; \
 	fi
 	rm -rf $(PKGDIR)
+	rm -rf $(BRLASER_BUILD)
 	rm -f config_done
 
 romfs: package_test
@@ -108,6 +160,9 @@ romfs: package_test
 	cp -fP $(PKGDIR)/usr/lib/libcupsimage.so* $(ROMFSDIR)/usr/lib/
 	cp -rf $(PKGDIR)/usr/lib/cups $(ROMFSDIR)/usr/lib/
 	cp -rf $(PKGDIR)/usr/share/cups $(ROMFSDIR)/usr/share/
+	if [ -d $(PKGDIR)/usr/share/ppd ]; then \
+		cp -rf $(PKGDIR)/usr/share/ppd $(ROMFSDIR)/usr/share/; \
+	fi
 	cp -rf $(PKGDIR)/usr/share/doc $(ROMFSDIR)/usr/share/
 	if [ -d $(PKGDIR)/usr/share/locale ]; then \
 		cp -rf $(PKGDIR)/usr/share/locale $(ROMFSDIR)/usr/share/; \

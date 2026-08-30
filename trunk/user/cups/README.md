@@ -28,6 +28,6 @@ Printer queues, PPD files, and local configuration are stored persistently in
 print data does not consume flash storage. Enabling CUPS disables the legacy
 RAW, LPRng, and u2ec printer services to prevent concurrent device access.
 
-The package contains CUPS' generic/raw and built-in raster drivers. Printer
-models that require a vendor-specific PPD or filter still need those files to
-be installed separately.
+The package also includes the brlaser Brother laser driver. Its 34 model PPD
+files are generated from `brlaser.drv` with the host `ppdc` tool during the
+build and installed under `/usr/share/ppd/Brother`.
