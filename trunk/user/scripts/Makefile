@@ -16,6 +16,9 @@ romfs:
 	$(ROMFSINST) -p +x $(THISDIR)/ap_script.sh /etc_ro/ap_script.sh
 	$(ROMFSINST) -p +x $(THISDIR)/sh_ezscript.sh /etc_ro/sh_ezscript.sh
 	$(ROMFSINST) -p +x $(THISDIR)/sysinfo.sh /etc_ro/sysinfo.sh
+ifeq ($(CONFIG_FIRMWARE_PRODUCT_ID),MSG1500-7615)
+	$(ROMFSINST) -d -S -p 644 $(THISDIR)/bg1.jpg /etc_ro/bg/wood.jpg
+endif
 ifeq ($(STORAGE_ENABLED),y)
 	$(ROMFSINST) /sbin/automount.sh
 endif

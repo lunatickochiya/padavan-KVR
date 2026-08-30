@@ -196,7 +196,9 @@ func_fill()
 	dir_crond="$dir_storage/cron/crontabs"
 	dir_wlan="$dir_storage/wlan"
 	dir_chnroute="$dir_storage/chinadns"
+	dir_bg="$dir_storage/bg"
 	#dir_gfwlist="$dir_storage/gfwlist"
+	default_bg="/etc_ro/bg/wood.jpg"
 
 	script_start="$dir_storage/start_script.sh"
 	script_started="$dir_storage/started_script.sh"
@@ -228,6 +230,13 @@ func_fill()
 
 	# create https dir
 	[ ! -d "$dir_httpssl" ] && mkdir -p -m 700 "$dir_httpssl"
+
+	# install the default WebUI background without replacing a user image
+	if [ ! -f "$dir_bg/wood.jpg" ] && [ -f "$default_bg" ] ; then
+		mkdir -p -m 755 "$dir_bg"
+		cp -f "$default_bg" "$dir_bg/wood.jpg"
+		chmod 644 "$dir_bg/wood.jpg"
+	fi
 
 	# create chnroute.txt
 	if [ ! -d "$dir_chnroute" ] ; then
