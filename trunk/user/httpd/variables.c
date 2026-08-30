@@ -292,6 +292,7 @@
 			{"front_led_wif", "", NULL, EVM_RESTART_TWEAKS},
 			{"front_led_pwr", "", NULL, EVM_RESTART_TWEAKS},
 			{"watchdog_cpu", "", NULL, EVM_RESTART_WDG},
+			{"cupsd_enable", "", NULL, EVM_RESTART_SPOOLER},
 			{"u2ec_enable", "", NULL, EVM_RESTART_SPOOLER},
 			{"lprd_enable", "", NULL, EVM_RESTART_SPOOLER},
 			{"rawd_enable", "", NULL, EVM_RESTART_SPOOLER},

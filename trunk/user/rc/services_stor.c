@@ -1468,7 +1468,11 @@ on_deferred_hotplug_dev(void)
 	if (nvram_match("usb_unplug_lp", "1"))
 	{
 		nvram_set_int_temp("usb_unplug_lp", 0);
-		if (!usb_port_module_used("usblp"))
+		if (!usb_port_module_used("usblp")
+#if defined (SRV_CUPS)
+		    && nvram_match("cupsd_enable", "0")
+#endif
+		   )
 			stop_usb_printer_spoolers();
 	}
 
@@ -1558,4 +1562,3 @@ safe_remove_all_stor_devices(int do_spindown)
 	unload_nfsd();
 #endif
 }
-

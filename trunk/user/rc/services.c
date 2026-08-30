@@ -1061,6 +1061,9 @@ start_services_once(int is_ap_mode)
 	start_vpn_server();
 	start_watchdog();
 	start_infosvr();
+#if defined(SRV_CUPS)
+	start_cups();
+#endif
 
 	if (!is_ap_mode) {
 		if (!is_upnp_run())
@@ -1116,6 +1119,9 @@ stop_services(int stopall)
 	}
 #if defined (USE_USB_SUPPORT)
 	stop_p910nd();
+#if defined (SRV_CUPS)
+	stop_cups();
+#endif
 #if defined (SRV_LPRD)
 	stop_lpd();
 #endif

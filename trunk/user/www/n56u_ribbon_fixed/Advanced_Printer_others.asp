@@ -23,6 +23,7 @@
 var $j = jQuery.noConflict();
 
 $j(document).ready(function() {
+	init_itoggle('cupsd_enable', change_cups_enabled);
 	init_itoggle('u2ec_enable');
 	init_itoggle('lprd_enable');
 });
@@ -50,6 +51,24 @@ function initial(){
 
 	if(!found_srv_lprd())
 		$("row_lprd").style.display = "none";
+
+	if(!found_srv_cups())
+		$("row_cups").style.display = "none";
+
+	change_cups_enabled();
+}
+
+function change_cups_enabled(){
+	var cups_on = found_srv_cups() && $("cupsd_enable_1").checked;
+
+	$("row_rawd").style.display = cups_on ? "none" : "";
+	$("row_lprd").style.display = (!cups_on && found_srv_lprd()) ? "" : "none";
+	$("row_u2ec").style.display = (!cups_on && found_srv_u2ec()) ? "" : "none";
+	$("row_cups_web").style.display = cups_on ? "" : "none";
+}
+
+function open_cups_web(){
+	window.open("http://<% nvram_get_x("", "lan_ipaddr"); %>:631/", "CUPS");
 }
 
 function applyRule(){
@@ -124,7 +143,32 @@ function done_validating(action){
                                     <div id="tabMenu" class="submenuBlock"></div>
 
                                     <table width="100%" cellpadding="4" cellspacing="0" class="table">
-                                        <tr>
+                                        <tr id="row_cups">
+                                            <th width="50%" style="border-top: 0 none;">
+                                                <#PrinterPortCUPS#>
+                                            </th>
+                                            <td style="border-top: 0 none;">
+                                                <div class="main_itoggle">
+                                                    <div id="cupsd_enable_on_of">
+                                                        <input type="checkbox" id="cupsd_enable_fake" <% nvram_match_x("General", "cupsd_enable", "1", "value=1 checked"); %><% nvram_match_x("General", "cupsd_enable", "0", "value=0"); %>>
+                                                    </div>
+                                                </div>
+
+                                                <div style="position: absolute; margin-left: -10000px;">
+                                                    <input type="radio" value="1" name="cupsd_enable" id="cupsd_enable_1" class="input" <% nvram_match_x("General", "cupsd_enable", "1", "checked"); %>/><#checkbox_Yes#>
+                                                    <input type="radio" value="0" name="cupsd_enable" id="cupsd_enable_0" class="input" <% nvram_match_x("General", "cupsd_enable", "0", "checked"); %>/><#checkbox_No#>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr id="row_cups_web">
+                                            <th>
+                                                <#PrinterPortCUPSWeb#>
+                                            </th>
+                                            <td>
+                                                <input type="button" class="btn btn-info" value="<#PrinterPortCUPSOpen#>" onclick="open_cups_web();">
+                                            </td>
+                                        </tr>
+                                        <tr id="row_rawd">
                                             <th width="50%" style="border-top: 0 none;">
                                                 <#PrinterPortRAW#>
                                             </th>

@@ -392,6 +392,7 @@ struct nvram_pair router_defaults[] = {
 	{ "computer_name", BOARD_NAME },
 	{ "pcache_reclaim", "2" },
 	{ "usb3_disable", "0" },
+	{ "cupsd_enable", "0" },
 	{ "u2ec_enable", "1" },
 	{ "lprd_enable", "1" },
 	{ "rawd_enable", "0" },

@@ -2670,6 +2670,11 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 #else
 	int found_srv_lprd = 0;
 #endif
+#if defined(SRV_CUPS)
+	int found_srv_cups = 1;
+#else
+	int found_srv_cups = 0;
+#endif
 #if defined(APP_SSHD)
 	int found_app_sshd = 1;
 #else
@@ -3023,6 +3028,7 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		"function found_app_l2tp() { return %d;}\n"
 		"function found_srv_u2ec() { return %d;}\n"
 		"function found_srv_lprd() { return %d;}\n"
+		"function found_srv_cups() { return %d;}\n"
 		"function found_app_sshd() { return %d;}\n"
 		"function found_app_scutclient() { return %d;}\n"
 		"function found_app_ttyd() { return %d;}\n"
@@ -3073,6 +3079,7 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		found_app_l2tp,
 		found_srv_u2ec,
 		found_srv_lprd,
+		found_srv_cups,
 		found_app_sshd,
 		found_app_scutclient,
 		found_app_ttyd,

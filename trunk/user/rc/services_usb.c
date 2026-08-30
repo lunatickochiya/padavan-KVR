@@ -125,6 +125,23 @@ stop_u2ec(void)
 }
 #endif
 
+#if defined(SRV_CUPS)
+void
+start_cups(void)
+{
+	if (nvram_match("cupsd_enable", "0"))
+		return;
+
+	eval("/usr/bin/cups.sh", "start");
+}
+
+void
+stop_cups(void)
+{
+	eval("/usr/bin/cups.sh", "stop");
+}
+#endif
+
 #if defined(SRV_LPRD)
 void
 start_lpd(void)
@@ -172,6 +189,13 @@ exec_printer_daemons(int call_fw)
 	char *opt_printer_script = "/opt/bin/on_hotplug_printer.sh";
 	char dev_lp[16];
 
+#if defined(SRV_CUPS)
+	if (nvram_match("cupsd_enable", "1")) {
+		start_cups();
+		return;
+	}
+#endif
+
 	for (i = 0; i < 10; i++) {
 		sprintf(dev_lp, "/dev/usb/lp%d", i);
 		if (check_if_dev_exist(dev_lp)) {
@@ -197,6 +221,9 @@ exec_printer_daemons(int call_fw)
 void
 stop_usb_printer_spoolers(void)
 {
+#if defined(SRV_CUPS)
+	stop_cups();
+#endif
 #if defined(SRV_U2EC)
 	stop_u2ec();
 #endif
@@ -257,4 +284,3 @@ try_start_usb_modem_to_wan(void)
 
 	try_wan_reconnect(1, 0);
 }
-

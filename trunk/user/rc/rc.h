@@ -788,6 +788,10 @@ void safe_remove_all_stor_devices(int do_spindown);
 void start_u2ec(void);
 void stop_u2ec(void);
 #endif
+#if defined (SRV_CUPS)
+void start_cups(void);
+void stop_cups(void);
+#endif
 #if defined (SRV_LPRD)
 void start_lpd(void);
 void stop_lpd(void);

@@ -217,6 +217,7 @@ dir_y											+= p910nd
 dir_y											+= usb-modeswitch
 dir_y											+= comgt-0.32
 dir_y											+= uqmi
+dir_$(CONFIG_FIRMWARE_INCLUDE_CUPS)				+= cups
 dir_$(CONFIG_FIRMWARE_INCLUDE_LPRD)				+= LPRng
 dir_$(CONFIG_FIRMWARE_INCLUDE_U2EC)				+= u2ec
 dir_$(CONFIG_FIRMWARE_INCLUDE_DUMP1090)			+= dump1090
