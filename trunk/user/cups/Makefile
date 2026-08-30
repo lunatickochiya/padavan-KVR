@@ -131,6 +131,7 @@ package_brlaser:
 		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS) $(CPUFLAGS) -Wl,--gc-sections -static-libstdc++ -static-libgcc -L$(STAGEDIR)/lib" \
 		-DCUPS_DATA_DIR=/usr/share/cups \
 		-DCUPS_SERVER_BIN=/usr/lib/cups \
+		-DCUPS_CONFIG=$(PKGDIR)/usr/bin/cups-config \
 		-DCUPS_CFLAGS=-I$(PKGDIR)/usr/include \
 		-DCUPS_LDFLAGS="-L$(PKGDIR)/usr/lib -L$(STAGEDIR)/lib" \
 		-DCUPS_LIBS="-L$(PKGDIR)/usr/lib;-L$(STAGEDIR)/lib;-lcupsimage;-lcups;-lz;-lpthread"
@@ -144,6 +145,7 @@ package_brlaser:
 	install -m 0755 $(BRLASER_BUILD)/rastertobrlaser $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser
 	install -m 0644 $(BRLASER_BUILD)/brlaser.drv $(PKGDIR)/usr/share/cups/drv/brlaser.drv
 	cp -f $(BRLASER_PPD)/*.ppd $(PKGDIR)/usr/share/ppd/Brother/
+	rm -f $(PKGDIR)/usr/bin/cups-config
 
 package_test: all
 	test -x $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser
