@@ -39,8 +39,8 @@ jobs:
         sh dl_toolchain.sh
         mkdir -p /opt/images/
 
-        ##### 修改内存空间和 storage空间17m
-        sed -i 's/0x200000/0x1100000/g' /opt/rt-n56u/trunk/configs/boards/MSG1500-7615/kernel-3.4.x-5.0.config
+        ##### 修改内存空间和 storage 空间为 17M
+        sed -i 's/CONFIG_MTD_STORE_PART_SIZ=0x0400000/CONFIG_MTD_STORE_PART_SIZ=0x1100000/' /opt/rt-n56u/trunk/configs/boards/MSG1500-7615/kernel-3.4.x-5.0.config
         sed -i 's/size_etc="6M"/size_etc="17M"/g' /opt/rt-n56u/trunk/user/scripts/dev_init.sh
         sed -i 's/size_tmp="24M"/size_tmp="120M"/g' /opt/rt-n56u/trunk/user/scripts/dev_init.sh
         sed -i 's/mtd_part_size=65536/mtd_part_size=17825792/g' /opt/rt-n56u/trunk/user/scripts/mtd_storage.sh
@@ -85,6 +85,7 @@ jobs:
         sed -i '/CONFIG_FIRMWARE_INCLUDE_NTFS_3G/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_LPRD/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_U2EC/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_CUPS/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_TCPDUMP/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_HDPARM/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_PARTED/d' .config
@@ -232,6 +233,9 @@ jobs:
 
         ##包含 USB-over-Ethernet 打印机守护程序。约 0.05MB
         echo "CONFIG_FIRMWARE_INCLUDE_U2EC=y" >> .config
+
+        ##包含 CUPS 打印服务和中文管理页面。约 4.7MB
+        echo "CONFIG_FIRMWARE_INCLUDE_CUPS=y" >> .config
 
         ##包含 "tcpdump" 工具。约 0.6MB
         echo "CONFIG_FIRMWARE_INCLUDE_TCPDUMP=y" >> .config

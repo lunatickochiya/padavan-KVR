@@ -159,6 +159,92 @@ static const struct cc_t {
 	{ "DB",  5,  7,  0 }
 };
 
+#if defined (BOARD_MSG1500_7615)
+#define MSG1500_CONFIG_PART_NAME		"Config"
+#define MSG1500_CONFIG_LAN_MAC_OFFSET	0x8014
+#define MSG1500_CONFIG_WAN_MAC_OFFSET	0x8036
+#define MSG1500_FACTORY_5G_MAC_OFFSET	0x04
+
+static int
+msg1500_is_hex_digit(unsigned char c)
+{
+	return ((c >= '0' && c <= '9') ||
+		(c >= 'a' && c <= 'f') ||
+		(c >= 'A' && c <= 'F'));
+}
+
+static int
+msg1500_mac_is_valid(const unsigned char *mac)
+{
+	int i, all_zero = 1, all_ff = 1;
+
+	if (mac[0] & 0x01)
+		return 0;
+
+	for (i = 0; i < ETHER_ADDR_LEN; i++) {
+		if (mac[i] != 0x00)
+			all_zero = 0;
+		if (mac[i] != 0xff)
+			all_ff = 0;
+	}
+
+	return !all_zero && !all_ff;
+}
+
+static int
+msg1500_read_ascii_mac(int offset, unsigned char *mac)
+{
+	char mac_text[18] = {0};
+	int i;
+
+	if (flash_mtd_read(MSG1500_CONFIG_PART_NAME, offset,
+			(unsigned char *)mac_text, sizeof(mac_text) - 1) < 0)
+		return -1;
+
+	for (i = 0; i < sizeof(mac_text) - 1; i++) {
+		if (i % 3 == 2) {
+			if (mac_text[i] != ':')
+				return -1;
+		} else if (!msg1500_is_hex_digit((unsigned char)mac_text[i])) {
+			return -1;
+		}
+	}
+
+	if (!ether_atoe(mac_text, mac) || !msg1500_mac_is_valid(mac))
+		return -1;
+
+	return 0;
+}
+
+int
+get_msg1500_mac(int mac_type, unsigned char *mac)
+{
+	int offset;
+
+	if (mac_type == MSG1500_MAC_2G) {
+		if (msg1500_read_ascii_mac(MSG1500_CONFIG_LAN_MAC_OFFSET, mac) < 0)
+			return -1;
+
+		/* The vendor 2.4 GHz MAC is not stored; OpenWrt derives it this way. */
+		mac[0] |= 0x02;
+		return 0;
+	}
+
+	if (mac_type == MSG1500_MAC_5G) {
+		if (flash_mtd_read(MTD_PART_NAME_FACTORY,
+				MSG1500_FACTORY_5G_MAC_OFFSET, mac, ETHER_ADDR_LEN) < 0)
+			return -1;
+
+		return msg1500_mac_is_valid(mac) ? 0 : -1;
+	}
+
+	offset = (mac_type == MSG1500_MAC_WAN) ?
+		MSG1500_CONFIG_WAN_MAC_OFFSET : MSG1500_CONFIG_LAN_MAC_OFFSET;
+
+	return msg1500_read_ascii_mac(offset, mac);
+}
+#endif
+
 inline int
 get_wired_mac_is_single(void)
 {
@@ -190,8 +276,16 @@ get_wired_mac(int is_wan)
 {
 	char macaddr[18] = {0};
 	unsigned char buffer[ETHER_ADDR_LEN] = {0};
+#if !defined (BOARD_MSG1500_7615)
 	int i_offset;
+#endif
 
+#if defined (BOARD_MSG1500_7615)
+	if (get_msg1500_mac(is_wan ? MSG1500_MAC_WAN : MSG1500_MAC_LAN, buffer) < 0) {
+		puts("Unable to read MAC from MSG1500 Config partition!");
+		return -1;
+	}
+#else
 	i_offset = get_wired_mac_e2p_offset(is_wan);
 	if (flash_mtd_read(MTD_PART_NAME_FACTORY, i_offset, buffer, ETHER_ADDR_LEN) < 0) {
 		puts("Unable to read MAC from EEPROM!");
@@ -200,6 +294,7 @@ get_wired_mac(int is_wan)
 
 	if (is_wan && get_wired_mac_is_single())
 		buffer[5] |= 0x03;	// last 2 bits reserved for MBSSID, use 0x03 for WAN (ra1: 0x01, apcli0: 0x02)
+#endif
 
 	ether_etoa(buffer, macaddr);
 
@@ -213,6 +308,11 @@ set_wired_mac(int is_wan, const char *mac)
 {
 	unsigned char ea[ETHER_ADDR_LEN] = {0};
 	int i_offset;
+
+#if defined (BOARD_MSG1500_7615)
+	puts("MSG1500 wired MAC addresses are stored in the protected Config partition.");
+	return EROFS;
+#endif
 
 	if (is_wan && get_wired_mac_is_single()) {
 		printf("This device has only single wired MAC-address!\n");
@@ -255,13 +355,22 @@ get_wireless_mac(int is_5ghz)
 {
 	char macaddr[18] = {0};
 	unsigned char buffer[ETHER_ADDR_LEN] = {0};
+#if !defined (BOARD_MSG1500_7615)
 	int i_offset;
+#endif
 
+#if defined (BOARD_MSG1500_7615)
+	if (get_msg1500_mac(is_5ghz ? MSG1500_MAC_5G : MSG1500_MAC_2G, buffer) < 0) {
+		puts("Unable to read MSG1500 wireless MAC!");
+		return -1;
+	}
+#else
 	i_offset = get_wireless_mac_e2p_offset(is_5ghz);
 	if (flash_mtd_read(MTD_PART_NAME_FACTORY, i_offset, buffer, ETHER_ADDR_LEN) < 0) {
 		puts("Unable to read MAC from EEPROM!");
 		return -1;
 	}
+#endif
 
 	ether_etoa(buffer, macaddr);
 #if BOARD_HAS_5G_RADIO
@@ -278,6 +387,11 @@ set_wireless_mac(int is_5ghz, const char *mac)
 {
 	unsigned char ea[ETHER_ADDR_LEN] = {0};
 	int i_offset;
+
+#if defined (BOARD_MSG1500_7615)
+	puts("MSG1500 wireless MAC addresses are derived from protected factory data.");
+	return EROFS;
+#endif
 
 	if (ether_atoe(mac, ea)) {
 		i_offset = get_wireless_mac_e2p_offset(is_5ghz);
@@ -655,6 +769,13 @@ gen_ralink_config(int is_soc_ap, int is_aband, int disable_autoscan)
 
 	//BssidNum
 	fprintf(fp, "BssidNum=%d\n", i_ssid_num);
+
+#if defined (BOARD_MSG1500_7615)
+	/* The MT7615 multi-profile loader maps the second profile to MacAddress2. */
+	p_str = nvram_safe_get((is_aband) ? "wl_macaddr" : "rt_macaddr");
+	if (strlen(p_str) == 17)
+		fprintf(fp, "MacAddress=%s\n", p_str);
+#endif
 
 	//SSID
 	fprintf(fp, "SSID%d=%s\n", 1, nvram_wlan_get(is_aband, "ssid"));
@@ -1719,5 +1840,3 @@ get_apcli_connected(const char *ifname)
 
 	return 0;
 }
-
-

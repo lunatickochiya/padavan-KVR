@@ -821,6 +821,15 @@ int set_wired_mac(int is_wan, const char *mac);
 int get_wireless_mac_e2p_offset(int is_5ghz);
 int get_wireless_mac(int is_5ghz);
 int set_wireless_mac(int is_5ghz, const char *mac);
+#if defined (BOARD_MSG1500_7615)
+enum {
+	MSG1500_MAC_LAN = 0,
+	MSG1500_MAC_WAN,
+	MSG1500_MAC_2G,
+	MSG1500_MAC_5G
+};
+int get_msg1500_mac(int mac_type, unsigned char *mac);
+#endif
 int get_wireless_cc(void);
 int set_wireless_cc(const char *cc);
 int gen_ralink_config_2g(int disable_autoscan);

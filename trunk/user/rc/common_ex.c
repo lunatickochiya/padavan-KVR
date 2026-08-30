@@ -137,7 +137,9 @@ get_eeprom_params(void)
 #endif
 	int i_offset, i_ret;
 	unsigned char buffer[32];
+#if !defined (BOARD_MSG1500_7615)
 	unsigned char ea[ETHER_ADDR_LEN];
+#endif
 	char macaddr_wl[]  = "00:11:22:33:44:55";
 	char macaddr_rt[]  = "00:11:22:33:44:56";
 	char macaddr_lan[] = "00:11:22:33:44:55";
@@ -148,6 +150,19 @@ get_eeprom_params(void)
 	char productid[16];
 	char fwver[16], fwver_sub[32];
 
+#if defined (BOARD_MSG1500_7615)
+	if (get_msg1500_mac(MSG1500_MAC_5G, buffer) == 0)
+		ether_etoa(buffer, macaddr_wl);
+
+	if (get_msg1500_mac(MSG1500_MAC_2G, buffer) == 0)
+		ether_etoa(buffer, macaddr_rt);
+
+	if (get_msg1500_mac(MSG1500_MAC_LAN, buffer) == 0)
+		ether_etoa(buffer, macaddr_lan);
+
+	if (get_msg1500_mac(MSG1500_MAC_WAN, buffer) == 0)
+		ether_etoa(buffer, macaddr_wan);
+#else
 #if (BOARD_5G_IN_SOC || !BOARD_HAS_5G_RADIO)
 	i_offset = OFFSET_MAC_ADDR_WSOC;
 #else
@@ -209,6 +224,7 @@ get_eeprom_params(void)
 			ether_etoa(buffer, macaddr_wan);
 		}
 	}
+#endif
 
 	nvram_set_temp("il0macaddr", macaddr_lan); // LAN
 	nvram_set_temp("il1macaddr", macaddr_wan); // WAN
