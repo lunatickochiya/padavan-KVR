@@ -17,6 +17,9 @@ PKGDIR = $(THISDIR)/install
 
 CUPS_CFLAGS = $(CFLAGS) -I$(STAGEDIR)/include/libusb-1.0 -ffunction-sections -fdata-sections
 CUPS_LDFLAGS = $(LDFLAGS) -Wl,--gc-sections,-rpath-link=$(STAGEDIR)/lib
+BRLASER_CC = $(word 1,$(CC))
+BRLASER_CXX = $(word 1,$(CXX))
+BRLASER_CFLAGS = $(CFLAGS) $(CPUFLAGS)
 
 .PHONY: all clean configure download_test extract_test config_test package_test package_cups package_brlaser romfs
 
@@ -117,14 +120,15 @@ package_brlaser:
 	rm -rf $(BRLASER_BUILD)
 	cmake -S $(BRLASER_NAME) -B $(BRLASER_BUILD) \
 		-DCMAKE_SYSTEM_NAME=Linux \
-		-DCMAKE_C_COMPILER=$(CC) \
-		-DCMAKE_CXX_COMPILER=$(CXX) \
+		-DCMAKE_C_COMPILER=$(BRLASER_CC) \
+		-DCMAKE_CXX_COMPILER=$(BRLASER_CXX) \
 		-DCMAKE_AR=$(AR) \
 		-DCMAKE_RANLIB=$(RANLIB) \
 		-DCMAKE_BUILD_TYPE=MinSizeRel \
 		-DCOMPILER_SUPPORT__fstack_protector_strong=FALSE \
-		-DCMAKE_CXX_FLAGS="$(CFLAGS) -static-libstdc++ -static-libgcc" \
-		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS) -Wl,--gc-sections -static-libstdc++ -static-libgcc -L$(STAGEDIR)/lib" \
+		-DCMAKE_C_FLAGS="$(BRLASER_CFLAGS)" \
+		-DCMAKE_CXX_FLAGS="$(BRLASER_CFLAGS) -static-libstdc++ -static-libgcc" \
+		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS) $(CPUFLAGS) -Wl,--gc-sections -static-libstdc++ -static-libgcc -L$(STAGEDIR)/lib" \
 		-DCUPS_DATA_DIR=/usr/share/cups \
 		-DCUPS_SERVER_BIN=/usr/lib/cups \
 		-DCUPS_CFLAGS=-I$(PKGDIR)/usr/include \
