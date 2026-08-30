@@ -25,7 +25,7 @@ all: download_test extract_test config_test
 		CFLAGS="$(CUPS_CFLAGS)" \
 		CPPFLAGS="-I$(STAGEDIR)/include" \
 		LDFLAGS="$(CUPS_LDFLAGS)" \
-		LIBS="-lz -lpthread -L$(STAGEDIR)/lib"
+		LIBS="-L$(STAGEDIR)/lib -liconv -lz -lpthread"
 	$(MAKE) package_cups
 	$(MAKE) package_brlaser
 
@@ -60,7 +60,7 @@ configure:
 	CFLAGS="$(CUPS_CFLAGS)" \
 	CPPFLAGS="-I$(STAGEDIR)/include" \
 	LDFLAGS="$(CUPS_LDFLAGS)" \
-	LIBS="-L$(STAGEDIR)/lib" \
+	LIBS="-L$(STAGEDIR)/lib -liconv -lz -lpthread" \
 	./configure \
 		--prefix=/usr \
 		--libdir=/usr/lib \
