@@ -1,0 +1,8 @@
+diff --git a/src/dns_server/server_udp.c b/src/dns_server/server_udp.c
+index 73e9f0a..4e9cbd3 100644
+--- a/src/dns_server/server_udp.c
++++ b/src/dns_server/server_udp.c
+@@ -25,3 +25,2 @@
+ #include <errno.h>
+-#include <linux/in.h>
+ #include <netinet/in.h>
