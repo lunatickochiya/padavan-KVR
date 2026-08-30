@@ -63,9 +63,10 @@ func_load()
 func_tarb()
 {
 	rm -f $tmp
-	cd $dir_storage
-	find * -print0 | xargs -0 touch -c -h -t 201001010000.00
-	find * ! -type d -print0 | sort -z | xargs -0 tar -cf $tmp 2>/dev/null
+	cd "$dir_storage" || exit 1
+	# Include dot-files and filenames containing spaces in the backup.
+	find . -exec touch -c -h -t 201001010000.00 {} \; 2>/dev/null
+	tar -cf "$tmp" . 2>/dev/null
 	cd - >>/dev/null
 	if [ ! -f "$tmp" ] ; then
 		logger -t "Storage" "无法创建 tarball 文件: $tmp"
