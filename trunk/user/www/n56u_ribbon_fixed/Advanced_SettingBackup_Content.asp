@@ -38,13 +38,16 @@ function initial(){
 	show_banner(1);
 	show_menu(5,7,5);
 
+	if (login_backup()){
+		showhide_div('row_nv_backup', 1);
+		showhide_div('row_st_backup', 1);
+	}
+
 	if (login_safe()){
 		showhide_div('row_nv_reset', 1);
-		showhide_div('row_nv_backup', 1);
 		showhide_div('row_nv_restore1', 1);
 		showhide_div('row_nv_restore2', 1);
 		showhide_div('row_st_reset', 1);
-		showhide_div('row_st_backup', 1);
 		showhide_div('row_st_restore1', 1);
 		showhide_div('row_st_restore2', 1);
 	}

@@ -249,18 +249,61 @@ msg1500_read_wifi_mac(unsigned char *mac)
 	return msg1500_mac_is_valid(mac) ? 0 : -1;
 }
 
+static int
+msg1500_mac_add(unsigned char *mac, int delta)
+{
+	int i;
+
+	while (delta > 0) {
+		for (i = ETHER_ADDR_LEN - 1; i >= 0; i--)
+			if (++mac[i] != 0)
+				break;
+		if (i < 0)
+			return -1;
+		delta--;
+	}
+
+	while (delta < 0) {
+		for (i = ETHER_ADDR_LEN - 1; i >= 0; i--)
+			if (mac[i]-- != 0)
+				break;
+		if (i < 0)
+			return -1;
+		delta++;
+	}
+
+	return msg1500_mac_is_valid(mac) ? 0 : -1;
+}
+
 int
 get_msg1500_mac(int mac_type, unsigned char *mac)
 {
 	int offset;
 
-	if (mac_type == MSG1500_MAC_2G || mac_type == MSG1500_MAC_5G)
+	if (mac_type == MSG1500_MAC_5G)
 		return msg1500_read_wifi_mac(mac);
+
+	if (mac_type == MSG1500_MAC_2G) {
+		/* OpenWrt derives 2.4G from the device LAN MAC and sets the local bit. */
+		if (msg1500_read_ascii_mac(MSG1500_CONFIG_LAN_MAC_OFFSET, mac) < 0) {
+			if (msg1500_read_wifi_mac(mac) < 0 || msg1500_mac_add(mac, -1) < 0)
+				return -1;
+		}
+		mac[0] |= 0x02;
+		return msg1500_mac_is_valid(mac) ? 0 : -1;
+	}
 
 	offset = (mac_type == MSG1500_MAC_WAN) ?
 		MSG1500_CONFIG_WAN_MAC_OFFSET : MSG1500_CONFIG_LAN_MAC_OFFSET;
 
-	return msg1500_read_ascii_mac(offset, mac);
+	if (msg1500_read_ascii_mac(offset, mac) == 0)
+		return 0;
+
+	/* Old Padavan images erased Config; recover the vendor address sequence. */
+	if (msg1500_read_wifi_mac(mac) < 0)
+		return -1;
+
+	return msg1500_mac_add(mac, mac_type == MSG1500_MAC_WAN ? 2 : -1);
 }
 #endif
 

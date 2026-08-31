@@ -20,6 +20,7 @@ CUPS_LDFLAGS = $(LDFLAGS) -Wl,--gc-sections,-rpath-link=$(STAGEDIR)/lib
 BRLASER_CC = $(word 1,$(CC))
 BRLASER_CXX = $(word 1,$(CXX))
 BRLASER_CFLAGS = $(CFLAGS) $(CPUFLAGS)
+LIBSTDCXX_SO = $(shell $(BRLASER_CXX) -print-file-name=libstdc++.so.6)
 
 .PHONY: all clean configure download_test extract_test config_test package_test package_cups package_brlaser romfs
 
@@ -144,12 +145,14 @@ package_brlaser:
 	mkdir -p $(PKGDIR)/usr/lib/cups/filter $(PKGDIR)/usr/share/cups/drv $(PKGDIR)/usr/share/ppd/Brother
 	install -m 0755 $(BRLASER_BUILD)/rastertobrlaser $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser
 	install -m 0644 $(BRLASER_BUILD)/brlaser.drv $(PKGDIR)/usr/share/cups/drv/brlaser.drv
-	cp -f $(BRLASER_PPD)/*.ppd $(PKGDIR)/usr/share/ppd/Brother/
+	install -m 0644 $(BRLASER_PPD)/*.ppd $(PKGDIR)/usr/share/ppd/Brother/
 	rm -f $(PKGDIR)/usr/bin/cups-config
 
 package_test: all
 	test -x $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser
 	test -n "$$(find $(PKGDIR)/usr/share/ppd/Brother -type f -name '*.ppd' -print -quit)"
+	test -z "$$(find $(PKGDIR)/usr/share/ppd/Brother -type f -name '*.ppd' ! -perm 0644 -print -quit)"
+	test -f $(LIBSTDCXX_SO)
 
 clean:
 	if [ -f $(SRC_NAME)/Makefile ]; then \
@@ -160,8 +163,10 @@ clean:
 	rm -f config_done
 
 romfs: package_test
-	mkdir -p $(ROMFSDIR)/usr/bin $(ROMFSDIR)/usr/sbin $(ROMFSDIR)/usr/lib
+	mkdir -p $(ROMFSDIR)/lib $(ROMFSDIR)/usr/bin $(ROMFSDIR)/usr/sbin $(ROMFSDIR)/usr/lib
 	mkdir -p $(ROMFSDIR)/usr/share $(ROMFSDIR)/etc_ro/cups
+	install -m 0755 $(LIBSTDCXX_SO) $(ROMFSDIR)/lib/libstdc++.so.6
+	$(STRIP) --strip-unneeded $(ROMFSDIR)/lib/libstdc++.so.6
 	cp -fP $(PKGDIR)/usr/lib/libcups.so* $(ROMFSDIR)/usr/lib/
 	cp -fP $(PKGDIR)/usr/lib/libcupsimage.so* $(ROMFSDIR)/usr/lib/
 	cp -rf $(PKGDIR)/usr/lib/cups $(ROMFSDIR)/usr/lib/
@@ -175,7 +180,7 @@ romfs: package_test
 		$(ROMFSDIR)/usr/lib/cups/filter/rastertobrlaser
 	install -m 0644 $(PKGDIR)/usr/share/cups/drv/brlaser.drv \
 		$(ROMFSDIR)/usr/share/cups/drv/brlaser.drv
-	cp -f $(PKGDIR)/usr/share/ppd/Brother/*.ppd $(ROMFSDIR)/usr/share/ppd/Brother/
+	install -m 0644 $(PKGDIR)/usr/share/ppd/Brother/*.ppd $(ROMFSDIR)/usr/share/ppd/Brother/
 	cp -rf $(PKGDIR)/usr/share/doc $(ROMFSDIR)/usr/share/
 	if [ -d $(PKGDIR)/usr/share/locale ]; then \
 		cp -rf $(PKGDIR)/usr/share/locale $(ROMFSDIR)/usr/share/; \
@@ -186,5 +191,7 @@ romfs: package_test
 	$(ROMFSINST) -p +x $(THISDIR)/cups.sh /usr/bin/cups.sh
 	$(ROMFSINST) $(THISDIR)/cups-files.conf /etc_ro/cups/cups-files.conf
 	$(ROMFSINST) $(THISDIR)/cupsd.conf /etc_ro/cups/cupsd.conf
+	test -s $(ROMFSDIR)/lib/libstdc++.so.6
 	test -x $(ROMFSDIR)/usr/lib/cups/filter/rastertobrlaser
 	test -n "$$(find $(ROMFSDIR)/usr/share/ppd/Brother -type f -name '*.ppd' -print -quit)"
+	test -z "$$(find $(ROMFSDIR)/usr/share/ppd/Brother -type f -name '*.ppd' ! -perm 0644 -print -quit)"

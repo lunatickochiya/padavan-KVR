@@ -588,6 +588,7 @@ static int __init
 dev_nvram_init(void)
 {
 	int ret, check_res = 1;
+	int migrate_legacy = 0;
 	const char *istatus;
 	struct nvram_header *header;
 
@@ -604,6 +605,17 @@ dev_nvram_init(void)
 		ret = ra_mtd_read_nm(MTD_NVRAM_NAME, NVRAM_MTD_OFFSET, NVRAM_SPACE, (unsigned char*)header);
 		if (ret == 0)
 			check_res = _nvram_init(header);
+
+#if (NVRAM_MTD_OFFSET > 0)
+		/* Keep settings when upgrading from firmware that used Config offset 0. */
+		if (check_res != 0) {
+			ret = ra_mtd_read_nm(MTD_NVRAM_NAME, 0, NVRAM_SPACE, (unsigned char*)header);
+			if (ret == 0 && _nvram_init(header) == 0) {
+				check_res = 0;
+				migrate_legacy = 1;
+			}
+		}
+#endif
 		
 		kfree(header);
 	}
@@ -616,6 +628,16 @@ dev_nvram_init(void)
 	}
 
 	nvram_major = NVRAM_MAJOR;
+
+	if (migrate_legacy) {
+		ret = nvram_commit();
+		if (ret)
+			printk(KERN_ERR "NVRAM: failed to migrate legacy data to offset 0x%x\n",
+				NVRAM_MTD_OFFSET);
+		else
+			printk(KERN_INFO "NVRAM: migrated legacy data to offset 0x%x\n",
+				NVRAM_MTD_OFFSET);
+	}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 	g_pdentry = proc_create(PROC_NVRAM_NAME, S_IRUGO, NULL, &nvram_ver_seq_fops);

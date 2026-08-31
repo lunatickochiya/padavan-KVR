@@ -445,6 +445,17 @@ get_login_safe(void)
 	return login_safe;
 }
 
+int
+get_login_backup(void)
+{
+#if defined (BOARD_MSG1500_7615)
+	/* Backup downloads are read-only and still require HTTP authentication. */
+	return login_ip.len != 0;
+#else
+	return get_login_safe();
+#endif
+}
+
 static void
 http_login(const uaddr *ip_now)
 {
@@ -1464,4 +1475,3 @@ main(int argc, char **argv)
 
 	return 0;
 }
-

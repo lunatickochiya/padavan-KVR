@@ -6,4 +6,11 @@ config	ASUS_NVRAM_API
 	default y
 	---help---
 	ASUS NVRAM R/W API
+
+config	ASUS_NVRAM_MTD_OFFSET
+	hex "NVRAM offset in Config partition"
+	depends on ASUS_NVRAM_API
+	default 0x0
+	---help---
+	Byte offset of the NVRAM data area inside the Config partition.
 endmenu

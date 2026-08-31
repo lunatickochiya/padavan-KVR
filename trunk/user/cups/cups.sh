@@ -23,6 +23,7 @@ prepare_cups()
 	if [ ! -s "$CUPS_CONFIG_DIR/cupsd.conf" ]; then
 		install_default_cupsd || return 1
 	fi
+	sed -i '/^[[:space:]]*DefaultEncryption[[:space:]]/d' "$CUPS_CONFIG_DIR/cupsd.conf"
 
 	chown -R nobody:nogroup "$CUPS_RUNTIME_DIR/cache" "$CUPS_RUNTIME_DIR/spool"
 	chmod 600 "$CUPS_CONFIG_DIR/cups-files.conf"

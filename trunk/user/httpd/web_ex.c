@@ -3390,6 +3390,7 @@ static int login_state_hook(int eid, webs_t wp, int argc, char **argv) {
 	fill_login_ip(s_addr, sizeof(s_addr));
 
 	websWrite(wp, "function login_safe() { return %d; }\n", get_login_safe());
+	websWrite(wp, "function login_backup() { return %d; }\n", get_login_backup());
 	websWrite(wp, "function login_ip_str() { return '%s'; }\n", s_addr);
 	websWrite(wp, "function login_mac_str() { return '%s'; }\n", get_login_mac());
 
@@ -4964,7 +4965,7 @@ do_nvram_file(const char *url, FILE *stream)
 	char *nvram_file = PROFILE_FIFO_DOWNLOAD;
 
 	unlink(nvram_file);
-	if (get_login_safe()) {
+	if (get_login_backup()) {
 		eval("/usr/sbin/nvram", "save", nvram_file);
 		do_file(nvram_file, stream);
 		unlink(nvram_file);
@@ -4977,7 +4978,7 @@ do_storage_file(const char *url, FILE *stream)
 	char *storage_file = STORAGE_FIFO_FILENAME;
 
 	unlink(storage_file);
-	if (get_login_safe()) {
+	if (get_login_backup()) {
 		eval("/sbin/mtd_storage.sh", "backup");
 		do_file(storage_file, stream);
 		unlink(storage_file);

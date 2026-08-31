@@ -24,16 +24,21 @@
 #if defined (CONFIG_MTD_NAND_RALINK) || defined (CONFIG_MTD_NAND_MTK)
 #if defined (CONFIG_MTD_NAND_USE_UBI_PART)
 #define NVRAM_MTD_SIZE		0x1F000		/* mtdblock1, UBI LEB 124K */
+#define NVRAM_MTD_OFFSET	0
 #else
 #define NVRAM_MTD_SIZE		0x20000		/* mtdblock1, nand block 128K */
+#if defined (CONFIG_ASUS_NVRAM_MTD_OFFSET)
+#define NVRAM_MTD_OFFSET	CONFIG_ASUS_NVRAM_MTD_OFFSET
+#else
+#define NVRAM_MTD_OFFSET	0
 #endif
-#define NVRAM_MTD_OFFSET	0		/* uboot env not shared with nvram */
+#endif
+#define NVRAM_SPACE		NVRAM_MTD_SIZE
 #else
 #define NVRAM_MTD_SIZE		0x10000		/* mtdblock1, 64K */
 #define NVRAM_MTD_OFFSET	0x01000		/* uboot env max space 4K, shared with nvram */
-#endif
-
 #define NVRAM_SPACE		(NVRAM_MTD_SIZE-NVRAM_MTD_OFFSET)
+#endif
 
 #define NVRAM_MAX_PARAM_LEN	64
 #define NVRAM_MAX_VALUE_LEN	4096
@@ -82,4 +87,3 @@ typedef struct anvram_ioctl_s {
 } anvram_ioctl_t;
 
 #endif /* _bcmnvram_h_ */
-

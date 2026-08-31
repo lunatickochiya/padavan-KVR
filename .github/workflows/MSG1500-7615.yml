@@ -437,9 +437,11 @@ jobs:
         sudo ./clear_tree
         sudo ./build_firmware_modify $TNAME 0
         test -s romfs/etc_ro/bg/wood.jpg
+        test -s romfs/lib/libstdc++.so.6
         test -x romfs/usr/lib/cups/filter/rastertobrlaser
         test -s romfs/usr/share/cups/drv/brlaser.drv
         test -n "$(find romfs/usr/share/ppd/Brother -type f -name '*.ppd' -print -quit)"
+        test -z "$(find romfs/usr/share/ppd/Brother -type f -name '*.ppd' ! -perm 0644 -print -quit)"
         find romfs/usr/share/ppd/Brother -type f -name '*.ppd' -print
         sudo mv -f images/*.trx /opt/images/
         cp -f .config /opt/images/${TNAME}.config
