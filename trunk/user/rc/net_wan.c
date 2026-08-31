@@ -245,12 +245,17 @@ reset_wan_vars(void)
 		set_wan_unit_param(unit, "ppp_pppd");
 	}
 
+#if defined (BOARD_MSG1500_7615)
+	/* Always use the two Breed MAC records, including after restoring old settings. */
+	nvram_set("wan_hwaddr", nvram_safe_get("il1macaddr"));
+#else
 	mac_buf[0] = 0;
 	mac_conv("wan_hwaddr_x", -1, mac_buf);
 	if (strlen(mac_buf) == 17)
 		nvram_set("wan_hwaddr", mac_buf);
 	else
 		nvram_set("wan_hwaddr", nvram_safe_get("il1macaddr"));
+#endif
 
 	set_wan_unit_param(unit, "hwaddr");
 
@@ -2733,4 +2738,3 @@ int stop_udhcpc_viptv(void)
 	snprintf(pidfile, sizeof(pidfile), "/var/run/udhcpc_viptv.pid");
 	return kill_pidfile(pidfile);
 }
-

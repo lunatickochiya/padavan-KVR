@@ -436,6 +436,11 @@ jobs:
         #########################################################################################
         sudo ./clear_tree
         sudo ./build_firmware_modify $TNAME 0
+        test -s romfs/etc_ro/bg/wood.jpg
+        test -x romfs/usr/lib/cups/filter/rastertobrlaser
+        test -s romfs/usr/share/cups/drv/brlaser.drv
+        test -n "$(find romfs/usr/share/ppd/Brother -type f -name '*.ppd' -print -quit)"
+        find romfs/usr/share/ppd/Brother -type f -name '*.ppd' -print
         sudo mv -f images/*.trx /opt/images/
         cp -f .config /opt/images/${TNAME}.config
         echo "build_time=$(date '+%Y年%m月%d日%H:%M:%S' | jq -sRr @uri)" >> $GITHUB_ENV

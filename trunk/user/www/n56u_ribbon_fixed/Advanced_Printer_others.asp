@@ -65,10 +65,22 @@ function change_cups_enabled(){
 	$("row_lprd").style.display = (!cups_on && found_srv_lprd()) ? "" : "none";
 	$("row_u2ec").style.display = (!cups_on && found_srv_u2ec()) ? "" : "none";
 	$("row_cups_web").style.display = cups_on ? "" : "none";
+	$("row_cups_config").style.display = cups_on ? "" : "none";
 }
 
 function open_cups_web(){
-	window.open("http://<% nvram_get_x("", "lan_ipaddr"); %>:631/", "CUPS");
+	var host = window.location.hostname;
+	if(host.indexOf(":") >= 0)
+		host = "[" + host + "]";
+	window.open("http://" + host + ":631/", "CUPS");
+}
+
+function restore_cups_config(){
+	if(!confirm("<#PrinterPortCUPSResetConfirm#>"))
+		return;
+
+	document.form["cupscfg.cupsd.conf"].value = "";
+	applyRule();
 }
 
 function applyRule(){
@@ -166,6 +178,15 @@ function done_validating(action){
                                             </th>
                                             <td>
                                                 <input type="button" class="btn btn-info" value="<#PrinterPortCUPSOpen#>" onclick="open_cups_web();">
+                                            </td>
+                                        </tr>
+                                        <tr id="row_cups_config">
+                                            <th>
+                                                <#PrinterPortCUPSConfig#>
+                                            </th>
+                                            <td>
+                                                <textarea rows="14" wrap="off" spellcheck="false" maxlength="16384" class="span12" name="cupscfg.cupsd.conf" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("cupscfg.cupsd.conf",""); %></textarea>
+                                                <input type="button" class="btn btn-warning" value="<#PrinterPortCUPSReset#>" onclick="restore_cups_config();">
                                             </td>
                                         </tr>
                                         <tr id="row_rawd">

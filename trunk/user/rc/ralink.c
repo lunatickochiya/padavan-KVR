@@ -161,9 +161,12 @@ static const struct cc_t {
 
 #if defined (BOARD_MSG1500_7615)
 #define MSG1500_CONFIG_PART_NAME		"Config"
+#define MSG1500_ALL_PART_NAME		"ALL"
+#define MSG1500_CONFIG_FLASH_OFFSET	0x80000
+#define MSG1500_FACTORY_FLASH_OFFSET	0x100000
 #define MSG1500_CONFIG_LAN_MAC_OFFSET	0x8014
 #define MSG1500_CONFIG_WAN_MAC_OFFSET	0x8036
-#define MSG1500_FACTORY_5G_MAC_OFFSET	0x04
+#define MSG1500_FACTORY_WIFI_MAC_OFFSET	0x04
 
 static int
 msg1500_is_hex_digit(unsigned char c)
@@ -192,16 +195,11 @@ msg1500_mac_is_valid(const unsigned char *mac)
 }
 
 static int
-msg1500_read_ascii_mac(int offset, unsigned char *mac)
+msg1500_parse_ascii_mac(const char *mac_text, unsigned char *mac)
 {
-	char mac_text[18] = {0};
 	int i;
 
-	if (flash_mtd_read(MSG1500_CONFIG_PART_NAME, offset,
-			(unsigned char *)mac_text, sizeof(mac_text) - 1) < 0)
-		return -1;
-
-	for (i = 0; i < sizeof(mac_text) - 1; i++) {
+	for (i = 0; i < 17; i++) {
 		if (i % 3 == 2) {
 			if (mac_text[i] != ':')
 				return -1;
@@ -216,27 +214,48 @@ msg1500_read_ascii_mac(int offset, unsigned char *mac)
 	return 0;
 }
 
+static int
+msg1500_read_ascii_mac(int offset, unsigned char *mac)
+{
+	char mac_text[18] = {0};
+
+	if (flash_mtd_read(MSG1500_CONFIG_PART_NAME, offset,
+			(unsigned char *)mac_text, sizeof(mac_text) - 1) >= 0 &&
+		msg1500_parse_ascii_mac(mac_text, mac) == 0)
+		return 0;
+
+	memset(mac_text, 0, sizeof(mac_text));
+	if (flash_mtd_read(MSG1500_ALL_PART_NAME,
+			MSG1500_CONFIG_FLASH_OFFSET + offset,
+			(unsigned char *)mac_text, sizeof(mac_text) - 1) < 0)
+		return -1;
+
+	return msg1500_parse_ascii_mac(mac_text, mac);
+}
+
+static int
+msg1500_read_wifi_mac(unsigned char *mac)
+{
+	if (flash_mtd_read(MTD_PART_NAME_FACTORY,
+			MSG1500_FACTORY_WIFI_MAC_OFFSET, mac, ETHER_ADDR_LEN) >= 0 &&
+		msg1500_mac_is_valid(mac))
+		return 0;
+
+	if (flash_mtd_read(MSG1500_ALL_PART_NAME,
+			MSG1500_FACTORY_FLASH_OFFSET + MSG1500_FACTORY_WIFI_MAC_OFFSET,
+			mac, ETHER_ADDR_LEN) < 0)
+		return -1;
+
+	return msg1500_mac_is_valid(mac) ? 0 : -1;
+}
+
 int
 get_msg1500_mac(int mac_type, unsigned char *mac)
 {
 	int offset;
 
-	if (mac_type == MSG1500_MAC_2G) {
-		if (msg1500_read_ascii_mac(MSG1500_CONFIG_LAN_MAC_OFFSET, mac) < 0)
-			return -1;
-
-		/* The vendor 2.4 GHz MAC is not stored; OpenWrt derives it this way. */
-		mac[0] |= 0x02;
-		return 0;
-	}
-
-	if (mac_type == MSG1500_MAC_5G) {
-		if (flash_mtd_read(MTD_PART_NAME_FACTORY,
-				MSG1500_FACTORY_5G_MAC_OFFSET, mac, ETHER_ADDR_LEN) < 0)
-			return -1;
-
-		return msg1500_mac_is_valid(mac) ? 0 : -1;
-	}
+	if (mac_type == MSG1500_MAC_2G || mac_type == MSG1500_MAC_5G)
+		return msg1500_read_wifi_mac(mac);
 
 	offset = (mac_type == MSG1500_MAC_WAN) ?
 		MSG1500_CONFIG_WAN_MAC_OFFSET : MSG1500_CONFIG_LAN_MAC_OFFSET;

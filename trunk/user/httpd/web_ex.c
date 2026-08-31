@@ -718,6 +718,8 @@ ej_dump(int eid, webs_t wp, int argc, char **argv)
 		snprintf(filename, sizeof(filename), "%s/%s", STORAGE_OVPNSVR_DIR, file+8);
 	else if (strncmp(file, "ovpncli.", 8)==0)
 		snprintf(filename, sizeof(filename), "%s/%s", STORAGE_OVPNCLI_DIR, file+8);
+	else if (strncmp(file, "cupscfg.", 8)==0)
+		snprintf(filename, sizeof(filename), "%s/%s", STORAGE_CUPS_DIR, file+8);
 	else if (strncmp(file, "dnsmasq.", 8)==0)
 		snprintf(filename, sizeof(filename), "%s/%s", STORAGE_DNSMASQ_DIR, file+8);
 	else if (strncmp(file, "scripts.", 8)==0)
@@ -898,7 +900,10 @@ validate_asp_apply(webs_t wp, int sid)
 		if (!strcmp(v->longname, "File")) {
 			const char *file_name = v->name+8;
 			
-			if (!strncmp(v->name, "dnsmasq.", 8)) {
+			if (!strncmp(v->name, "cupscfg.", 8)) {
+				if (write_textarea_to_file(value, STORAGE_CUPS_DIR, file_name))
+					restart_needed_bits |= event_mask;
+			} else if (!strncmp(v->name, "dnsmasq.", 8)) {
 				if (write_textarea_to_file(value, STORAGE_DNSMASQ_DIR, file_name))
 					restart_needed_bits |= event_mask;
 			} else if (!strncmp(v->name, "scripts.", 8)) {

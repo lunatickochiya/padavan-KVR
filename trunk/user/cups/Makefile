@@ -169,6 +169,13 @@ romfs: package_test
 	if [ -d $(PKGDIR)/usr/share/ppd ]; then \
 		cp -rf $(PKGDIR)/usr/share/ppd $(ROMFSDIR)/usr/share/; \
 	fi
+	mkdir -p $(ROMFSDIR)/usr/lib/cups/filter $(ROMFSDIR)/usr/share/cups/drv
+	mkdir -p $(ROMFSDIR)/usr/share/ppd/Brother
+	install -m 0755 $(PKGDIR)/usr/lib/cups/filter/rastertobrlaser \
+		$(ROMFSDIR)/usr/lib/cups/filter/rastertobrlaser
+	install -m 0644 $(PKGDIR)/usr/share/cups/drv/brlaser.drv \
+		$(ROMFSDIR)/usr/share/cups/drv/brlaser.drv
+	cp -f $(PKGDIR)/usr/share/ppd/Brother/*.ppd $(ROMFSDIR)/usr/share/ppd/Brother/
 	cp -rf $(PKGDIR)/usr/share/doc $(ROMFSDIR)/usr/share/
 	if [ -d $(PKGDIR)/usr/share/locale ]; then \
 		cp -rf $(PKGDIR)/usr/share/locale $(ROMFSDIR)/usr/share/; \
@@ -179,3 +186,5 @@ romfs: package_test
 	$(ROMFSINST) -p +x $(THISDIR)/cups.sh /usr/bin/cups.sh
 	$(ROMFSINST) $(THISDIR)/cups-files.conf /etc_ro/cups/cups-files.conf
 	$(ROMFSINST) $(THISDIR)/cupsd.conf /etc_ro/cups/cupsd.conf
+	test -x $(ROMFSDIR)/usr/lib/cups/filter/rastertobrlaser
+	test -n "$$(find $(ROMFSDIR)/usr/share/ppd/Brother -type f -name '*.ppd' -print -quit)"
