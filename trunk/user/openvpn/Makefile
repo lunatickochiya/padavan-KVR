@@ -1,5 +1,6 @@
 THISDIR = $(shell pwd)
-SRC_NAME=openvpn-2.5.9
+SRC_NAME=openvpn-2.7.6
+SRC_SHA256=10e24a9385f23cc38cc5cf448f3ca0769f939bc4cbecc4f4647d7e006e52db74
 
 CFLAGS += -ffunction-sections -fdata-sections -fvisibility=hidden
 LDFLAGS += -Wl,--gc-sections
@@ -9,6 +10,7 @@ all: extract_test config_test
 
 extract_test:
 	( if [ ! -d $(SRC_NAME) ]; then \
+		echo "$(SRC_SHA256)  $(SRC_NAME).tar.gz" | sha256sum -c - ; \
 		tar -zxf $(SRC_NAME).tar.gz; \
 		patch -d $(SRC_NAME) -p1 < $(SRC_NAME).patch ; \
 	fi )
@@ -23,6 +25,7 @@ config_test:
 configure:
 	( cd $(SRC_NAME) ; \
 	autoreconf -fi ; \
+	GIT=false \
 	IFCONFIG=/sbin/ifconfig \
 	ROUTE=/sbin/route \
 	NETSTAT=/bin/netstat \
@@ -30,18 +33,18 @@ configure:
 		--prefix=/usr \
 		--disable-debug \
 		--disable-plugins \
-		--disable-pkcs11 \
+		--disable-plugin-auth-pam \
+		--disable-plugin-down-root \
 		--disable-ofb-cfb \
 		--disable-selinux \
 		--disable-systemd \
-		--disable-iproute2 \
 		--disable-unit-tests \
 		--disable-management \
+		--disable-dco \
+		--disable-lz4 \
+		--disable-port-share \
 		--enable-small \
-		--enable-multihome \
-		--enable-pf \
 		--enable-fragment \
-		--enable-def-auth \
 		--enable-lzo \
 		--with-crypto-library=openssl \
 		--with-sysroot=$(STAGEDIR) \

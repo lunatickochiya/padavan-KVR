@@ -1,0 +1,52 @@
+diff --git a/Makefile.am b/Makefile.am
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -54,7 +54,7 @@ BUILT_SOURCES = \
+ 	config-version.h
+ endif
+ 
+-SUBDIRS = distro include src sample doc tests
++SUBDIRS = distro include src
+ 
+ dist_doc_DATA = \
+ 	README \
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -763,14 +763,16 @@
+	*-*-linux*)
+ 		PKG_CHECK_MODULES([LIBCAPNG],
+ 				  [libcap-ng],
+-				  [],
+-				  [AC_MSG_ERROR([libcap-ng package not found. Is the development package and pkg-config ${pkg_config_found} installed?])]
++				  [have_libcapng="yes"],
++				  [have_libcapng="no"]
+ 		)
+-		AC_CHECK_HEADER([sys/prctl.h],,[AC_MSG_ERROR([sys/prctl.h not found!])])
+ 
+-		OPTIONAL_LIBCAPNG_CFLAGS="${LIBCAPNG_CFLAGS}"
+-		OPTIONAL_LIBCAPNG_LIBS="${LIBCAPNG_LIBS}"
+-		AC_DEFINE(HAVE_LIBCAPNG, 1, [Enable libcap-ng support])
++		if test "${have_libcapng}" = "yes"; then
++			AC_CHECK_HEADER([sys/prctl.h],,[AC_MSG_ERROR([sys/prctl.h not found!])])
++			OPTIONAL_LIBCAPNG_CFLAGS="${LIBCAPNG_CFLAGS}"
++			OPTIONAL_LIBCAPNG_LIBS="${LIBCAPNG_LIBS}"
++			AC_DEFINE(HAVE_LIBCAPNG, 1, [Enable libcap-ng support])
++		fi
+ 	;;
+ esac
+ 
+diff --git a/src/openvpn/syshead.h b/src/openvpn/syshead.h
+--- a/src/openvpn/syshead.h
++++ b/src/openvpn/syshead.h
+@@ -26,6 +26,10 @@
+ #include "compat.h"
+ #include <stdbool.h>
+ 
++#ifndef static_assert
++#define static_assert _Static_assert
++#endif
++
+ /* branch prediction hints */
+ #if defined(__GNUC__)
+ #define likely(x)   __builtin_expect((x), 1)

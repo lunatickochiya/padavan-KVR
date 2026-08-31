@@ -533,8 +533,9 @@ load_user_config(FILE *fp, const char *dir_name, const char *file_name, const ch
 			if (forbid_list && is_param_forbidden(line, forbid_list))
 				continue;
 			
-			line[strlen(line) - 1] = '\n';
-			fprintf(fp, line);
+			fputs(line, fp);
+			if (line[strlen(line) - 1] != '\n')
+				fputc('\n', fp);
 		}
 		
 		fclose(fp_user);

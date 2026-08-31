@@ -19,6 +19,7 @@
 <script type="text/javascript" src="/general.js"></script>
 <script type="text/javascript" src="/itoggle.js"></script>
 <script type="text/javascript" src="/popup.js"></script>
+<script type="text/javascript" src="/openvpn-profile.js"></script>
 <script>
 var $j = jQuery.noConflict();
 
@@ -166,6 +167,16 @@ function validForm(){
 
 	var mode = document.form.vpns_type.value;
 	if (mode == "2") {
+		if (document.form.vpns_ov_custom.value == "1") {
+			var profile = validate_openvpn_server_profile();
+			if (!profile)
+				return false;
+			document.form['ovpnsvr.server.ovpn'].value = prepareOpenVPNServerProfile(profile);
+			document.form.vpns_ov_mode.value = profile.mode;
+			document.form.vpns_ov_prot.value = (!support_ipv6() && profile.protocol > 1) ? (profile.protocol & 1) : profile.protocol;
+			document.form.vpns_ov_port.value = profile.port;
+			return true;
+		}
 		if(!validate_range(document.form.vpns_ov_port, 1, 65535))
 			return false;
 		
@@ -232,6 +243,8 @@ function done_validating(action){
 
 function textarea_ovpn_enabled(v){
 	inputCtrl(document.form['ovpnsvr.server.conf'], v);
+	inputCtrl(document.form['ovpnsvr.server.ovpn'], v);
+	inputCtrl($('vpns_ovpn_file'), v);
 	if (!login_safe())
 		v=0;
 	inputCtrl(document.form['ovpnsvr.ca.crt'], v);
@@ -240,6 +253,89 @@ function textarea_ovpn_enabled(v){
 	inputCtrl(document.form['ovpnsvr.server.key'], v);
 	inputCtrl(document.form['ovpnsvr.ta.key'], v);
 	inputCtrl(document.form['ovpnsvr.stc2.key'], v);
+}
+
+function openvpn_profile_error(code) {
+	var messages = {
+		'empty': '<#OVPN_Error_Empty#>',
+		'size': '<#OVPN_Error_Size#>',
+		'inline': '<#OVPN_Error_Inline#>',
+		'dev': '<#OVPN_Error_Dev#>',
+		'server': '<#OVPN_Error_Server#>',
+		'port': '<#OVPN_Error_Port#>'
+	};
+	return messages[code] || '<#OVPN_Profile_Invalid#>';
+}
+
+function set_openvpn_profile_status(ok, message) {
+	var status = $('vpns_ovpn_status');
+	status.style.color = ok ? '#3c763d' : '#b94a48';
+	status.innerHTML = message;
+}
+
+function validate_openvpn_server_profile() {
+	var textarea = document.form['ovpnsvr.server.ovpn'];
+	var profile = parseOpenVPNServerProfile(textarea.value);
+	if (!profile.ok) {
+		set_openvpn_profile_status(false, openvpn_profile_error(profile.error));
+		textarea.focus();
+		return null;
+	}
+	if (!profile.port || profile.port < 1 || profile.port > 65535) {
+		set_openvpn_profile_status(false, openvpn_profile_error('port'));
+		textarea.focus();
+		return null;
+	}
+	set_openvpn_profile_status(true, '<#OVPN_Profile_Valid#>');
+	return profile;
+}
+
+function import_openvpn_server_profile(input) {
+	if (!input.files || !input.files.length)
+		return;
+
+	var reader = new FileReader();
+	reader.onerror = function() {
+		set_openvpn_profile_status(false, '<#OVPN_Profile_Invalid#>');
+	};
+	reader.onload = function(event) {
+		document.form['ovpnsvr.server.ovpn'].value = event.target.result;
+		var profile = validate_openvpn_server_profile();
+		if (!profile)
+			return;
+		document.form['ovpnsvr.server.ovpn'].value = prepareOpenVPNServerProfile(profile);
+		document.form.vpns_ov_mode.value = profile.mode;
+		document.form.vpns_ov_prot.value = (!support_ipv6() && profile.protocol > 1) ? (profile.protocol & 1) : profile.protocol;
+		document.form.vpns_ov_port.value = profile.port;
+		change_vpns_vnet_enable();
+	};
+	reader.readAsText(input.files[0]);
+}
+
+function change_vpns_ov_custom() {
+	var is_ov = (document.form.vpns_type.value == "2") ? 1 : 0;
+	var custom = (is_ov && document.form.vpns_ov_custom.value == "1") ? 1 : 0;
+	var generated = (is_ov && !custom) ? 1 : 0;
+	var generated_rows = [
+		'row_vpns_ov_prot', 'row_vpns_ov_port', 'row_vpns_ov_mdig',
+		'row_vpns_ov_ciph', 'row_vpns_ov_ncp_clist', 'row_vpns_ov_compress',
+		'row_vpns_ov_atls', 'row_vpns_ov_tcv2', 'row_vpns_ov_rdgw',
+		'row_vpns_ov_conf'
+	];
+	var i;
+
+	showhide_div('row_vpns_ov_custom', is_ov);
+	showhide_div('row_vpns_ov_mode', is_ov);
+	showhide_div('row_vpns_ov_profile', custom);
+	for (i = 0; i < generated_rows.length; i++)
+		showhide_div(generated_rows[i], generated);
+
+	showhide_div('certs_hint', generated && !openvpn_srv_cert_found());
+	showhide_div('tbl_vpn_pool', !custom && document.form.vpns_enable[0].checked);
+	if (custom)
+		showhide_div('tab_vpns_acl', 0);
+	else
+		change_vpns_vnet_enable();
 }
 
 function change_vpns_enabled(){
@@ -278,6 +374,7 @@ function change_vpns_type(){
 	showhide_div('row_vpns_script', 1);
 
 	showhide_div('row_vpns_ov_mode', is_ov);
+	showhide_div('row_vpns_ov_custom', is_ov);
 	showhide_div('row_vpns_ov_prot', is_ov);
 	showhide_div('row_vpns_ov_port', is_ov);
 	showhide_div('row_vpns_ov_mdig', is_ov);
@@ -323,6 +420,7 @@ function change_vpns_type(){
 	}
 
 	change_vpns_vnet_enable();
+	change_vpns_ov_custom();
 }
 
 function calc_vpn_addr(vnet_show,is_openvpn){
@@ -844,7 +942,16 @@ function getHash(){
                                         &nbsp;<span style="color:#888;">[1000..1460]</span>
                                     </td>
                                 </tr>
-                                <tr id="row_vpns_ov_mode" style="display:none">
+	                                <tr id="row_vpns_ov_custom" style="display:none">
+	                                    <th><#OVPN_Server_Config_Mode#></th>
+	                                    <td>
+	                                        <select name="vpns_ov_custom" class="input" onchange="change_vpns_ov_custom();">
+	                                            <option value="0" <% nvram_match_x("", "vpns_ov_custom", "0","selected"); %>><#OVPN_Server_Config_Generated#></option>
+	                                            <option value="1" <% nvram_match_x("", "vpns_ov_custom", "1","selected"); %>><#OVPN_Server_Config_Custom#></option>
+	                                        </select>
+	                                    </td>
+	                                </tr>
+	                                <tr id="row_vpns_ov_mode" style="display:none">
                                     <th><#OVPN_Mode#></th>
                                     <td>
                                         <select name="vpns_ov_mode" class="input" onchange="change_vpns_vnet_enable();">
@@ -946,14 +1053,22 @@ function getHash(){
                                         </select>
                                     </td>
                                 </tr>
-                                <tr id="row_vpns_ov_conf" style="display:none">
+	                                <tr id="row_vpns_ov_conf" style="display:none">
                                     <td colspan="2" style="padding-bottom: 15px;">
                                         <a href="javascript:spoiler_toggle('spoiler_vpns_ov_conf')"><span><#OVPN_User#></span></a>
                                         <div id="spoiler_vpns_ov_conf" style="display:none;">
                                             <textarea rows="16" wrap="off" spellcheck="false" maxlength="8192" class="span12" name="ovpnsvr.server.conf" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpnsvr.server.conf",""); %></textarea>
                                         </div>
                                     </td>
-                                </tr>
+	                                </tr>
+	                                <tr id="row_vpns_ov_profile" style="display:none">
+	                                    <th><#OVPN_Profile_Import#></th>
+	                                    <td>
+	                                        <input type="file" id="vpns_ovpn_file" accept=".ovpn,.conf,text/plain" onchange="import_openvpn_server_profile(this);" />
+	                                        <span id="vpns_ovpn_status" style="margin-left: 8px;"></span>
+	                                        <textarea rows="18" wrap="off" spellcheck="false" maxlength="32768" class="span12" name="ovpnsvr.server.ovpn" style="margin-top: 8px; font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpnsvr.server.ovpn",""); %></textarea>
+	                                    </td>
+	                                </tr>
                                 <tr id="row_vpns_script">
                                     <td colspan="2" style="padding-bottom: 15px;">
                                         <a href="javascript:spoiler_toggle('spoiler_script')"><span><#RunPostVPNS#></span></a>

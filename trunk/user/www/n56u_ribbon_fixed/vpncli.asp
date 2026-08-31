@@ -19,6 +19,7 @@
 <script type="text/javascript" src="/general.js"></script>
 <script type="text/javascript" src="/itoggle.js"></script>
 <script type="text/javascript" src="/popup.js"></script>
+<script type="text/javascript" src="/openvpn-profile.js"></script>
 <script>
 var $j = jQuery.noConflict();
 
@@ -138,6 +139,20 @@ function validForm(){
 	if (mode == "2") {
 		if(!validate_range(document.form.vpnc_ov_port, 1, 65535))
 			return false;
+		if (document.form.vpnc_ov_auth.value != "0") {
+			if (document.form.vpnc_user.value.length < 1) {
+				alert("<#OVPN_Username_Required#>");
+				document.form.vpnc_user.focus();
+				return false;
+			}
+			if (!validate_string(document.form.vpnc_user))
+				return false;
+			if (document.form.vpnc_pass.value.length < 1) {
+				alert("<#OVPN_Password_Required#>");
+				document.form.vpnc_pass.focus();
+				return false;
+			}
+		}
 	}
 	else {
 		if(!validate_range(document.form.vpnc_mtu, 1000, 1460))
@@ -161,6 +176,64 @@ function textarea_ovpn_enabled(v){
 	inputCtrl(document.form['ovpncli.client.crt'], v);
 	inputCtrl(document.form['ovpncli.client.key'], v);
 	inputCtrl(document.form['ovpncli.ta.key'], v);
+	inputCtrl($('vpnc_ovpn_file'), v);
+}
+
+function openvpn_profile_error(code) {
+	var messages = {
+		'empty': '<#OVPN_Error_Empty#>',
+		'size': '<#OVPN_Error_Size#>',
+		'inline': '<#OVPN_Error_Inline#>',
+		'dev': '<#OVPN_Error_Dev#>',
+		'remote': '<#OVPN_Error_Remote#>',
+		'port': '<#OVPN_Error_Port#>',
+		'ca': '<#OVPN_Error_CA#>',
+		'certificate': '<#OVPN_Error_Certificate#>',
+		'authentication': '<#OVPN_Error_Authentication#>',
+		'tls': '<#OVPN_Error_TLS#>'
+	};
+	return messages[code] || '<#OVPN_Profile_Invalid#>';
+}
+
+function set_openvpn_profile_status(ok, message) {
+	var status = $('vpnc_ovpn_status');
+	status.style.color = ok ? '#3c763d' : '#b94a48';
+	status.innerHTML = message;
+}
+
+function import_openvpn_client_profile(input) {
+	if (!input.files || !input.files.length)
+		return;
+
+	var reader = new FileReader();
+	reader.onerror = function() {
+		set_openvpn_profile_status(false, '<#OVPN_Profile_Invalid#>');
+	};
+	reader.onload = function(event) {
+		var profile = parseOpenVPNClientProfile(event.target.result);
+		if (!profile.ok) {
+			set_openvpn_profile_status(false, openvpn_profile_error(profile.error));
+			return;
+		}
+
+		document.form.vpnc_peer.value = profile.remote;
+		document.form.vpnc_ov_port.value = profile.port;
+		document.form.vpnc_ov_prot.value = (!support_ipv6() && profile.protocol > 1) ? (profile.protocol & 1) : profile.protocol;
+		document.form.vpnc_ov_mode.value = profile.mode;
+		document.form.vpnc_ov_auth.value = profile.auth;
+		document.form.vpnc_ov_atls.value = profile.tlsMode;
+		document.form['ovpncli.ca.crt'].value = profile.ca;
+		document.form['ovpncli.client.crt'].value = profile.cert;
+		document.form['ovpncli.client.key'].value = profile.key;
+		document.form['ovpncli.ta.key'].value = profile.tls;
+		document.form['ovpncli.client.conf'].value = profile.extra;
+
+		change_vpnc_ov_auth();
+		change_vpnc_ov_atls();
+		change_vpnc_ov_mode();
+		set_openvpn_profile_status(true, '<#OVPN_Profile_Valid#>');
+	};
+	reader.readAsText(input.files[0]);
 }
 
 function change_vpnc_enabled() {
@@ -198,6 +271,7 @@ function change_vpnc_type() {
 	showhide_div('row_vpnc_ov_compress', is_ov);
 	showhide_div('row_vpnc_ov_atls', is_ov);
 	showhide_div('row_vpnc_ov_mode', is_ov);
+	showhide_div('row_vpnc_ov_import', is_ov);
 	showhide_div('row_vpnc_ov_conf', is_ov);
 	showhide_div('tab_vpnc_ssl', is_ov);
 	showhide_div('certs_hint', (is_ov && !openvpn_cli_cert_found()) ? 1 : 0);
@@ -220,12 +294,14 @@ function change_vpnc_type() {
 }
 
 function change_vpnc_ov_auth() {
-	var v = (document.form.vpnc_ov_auth.value == "1") ? 1 : 0;
+	var auth = document.form.vpnc_ov_auth.value;
+	var use_password = (auth != "0") ? 1 : 0;
+	var use_certificate = (auth != "1") ? 1 : 0;
 
-	showhide_div('row_vpnc_user', v);
-	showhide_div('row_vpnc_pass', v);
-	showhide_div('row_client_key', !v);
-	showhide_div('row_client_crt', !v);
+	showhide_div('row_vpnc_user', use_password);
+	showhide_div('row_vpnc_pass', use_password);
+	showhide_div('row_client_key', use_certificate);
+	showhide_div('row_client_crt', use_certificate);
 }
 
 function change_vpnc_ov_atls() {
@@ -415,10 +491,11 @@ function getHash(){
                                 <tr id="row_vpnc_ov_auth" style="display:none">
                                     <th><#OVPN_Auth#></th>
                                     <td>
-                                        <select name="vpnc_ov_auth" class="input" onchange="change_vpnc_ov_auth();">
-                                            <option value="0" <% nvram_match_x("", "vpnc_ov_auth", "0","selected"); %>>TLS: client.crt/client.key</option>
-                                            <option value="1" <% nvram_match_x("", "vpnc_ov_auth", "1","selected"); %>>TLS: username/password</option>
-                                        </select>
+	                                        <select name="vpnc_ov_auth" class="input" onchange="change_vpnc_ov_auth();">
+	                                            <option value="0" <% nvram_match_x("", "vpnc_ov_auth", "0","selected"); %>><#OVPN_Auth_Certificate#></option>
+	                                            <option value="1" <% nvram_match_x("", "vpnc_ov_auth", "1","selected"); %>><#OVPN_Auth_Password#></option>
+	                                            <option value="2" <% nvram_match_x("", "vpnc_ov_auth", "2","selected"); %>><#OVPN_Auth_CertificatePassword#></option>
+	                                        </select>
                                     </td>
                                 </tr>
                                 <tr id="row_vpnc_user">
@@ -552,7 +629,14 @@ function getHash(){
                                         </select>
                                     </td>
                                 </tr>
-                                <tr id="row_vpnc_ov_conf" style="display:none">
+	                                <tr id="row_vpnc_ov_import" style="display:none">
+	                                    <th><#OVPN_Profile_Import#></th>
+	                                    <td>
+	                                        <input type="file" id="vpnc_ovpn_file" accept=".ovpn,text/plain" onchange="import_openvpn_client_profile(this);" />
+	                                        <span id="vpnc_ovpn_status" style="margin-left: 8px;"></span>
+	                                    </td>
+	                                </tr>
+	                                <tr id="row_vpnc_ov_conf" style="display:none">
                                     <td colspan="2" style="padding-bottom: 0px;">
                                         <a href="javascript:spoiler_toggle('spoiler_vpnc_ov_conf')"><span><#OVPN_User#></span></a>
                                         <div id="spoiler_vpnc_ov_conf" style="display:none;">

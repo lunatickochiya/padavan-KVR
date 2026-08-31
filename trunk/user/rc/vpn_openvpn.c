@@ -37,6 +37,7 @@
 #define SERVER_PID_FILE		"/var/run/openvpn_svr.pid"
 #define SERVER_ROOT_DIR		"/etc/openvpn/server"
 #define SERVER_CERT_DIR		"/etc/storage/openvpn/server"
+#define SERVER_CUSTOM_CONF	"server.ovpn"
 #define SERVER_LOG_NAME		"OpenVPN server"
 
 #define CLIENT_PID_FILE		"/var/run/openvpn_cli.pid"
@@ -92,6 +93,29 @@ static const char *forbidden_list[] = {
 	"compress",
 	"persist-key",
 	"persist-tun",
+	NULL
+};
+
+static const char *custom_server_forbidden_list[] = {
+	"daemon",
+	"writepid",
+	"cd",
+	"chroot",
+	"user",
+	"group",
+	"up",
+	"down",
+	"route-up",
+	"route-pre-down",
+	"ipchange",
+	"learn-address",
+	"client-connect",
+	"client-disconnect",
+	"script-security",
+	"tmp-dir",
+	"management",
+	"plugin",
+	"dev-node",
 	NULL
 };
 
@@ -335,6 +359,132 @@ openvpn_add_key(FILE *fp, const char *key_dir, const char *key_file, const char 
 }
 
 static int
+openvpn_custom_option_forbidden(const char *option)
+{
+	const char **forbidden = custom_server_forbidden_list;
+
+	while (*forbidden) {
+		if (strcmp(option, *forbidden) == 0)
+			return 1;
+		forbidden++;
+	}
+
+	return 0;
+}
+
+static int
+openvpn_validate_custom_server_conf(FILE *fp, int is_tun)
+{
+	char line[512], option[64], value[128];
+	const char *required_dev = (is_tun) ? IFNAME_SERVER_TUN : IFNAME_SERVER_TAP;
+	int in_inline = 0, has_dev = 0, has_server = 0;
+
+	while (fgets(line, sizeof(line), fp)) {
+		char *p = line;
+		int items;
+
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		if (*p == '<') {
+			if (p[1] == '/')
+				in_inline = 0;
+			else
+				in_inline = 1;
+			continue;
+		}
+
+		if (in_inline || *p == '\0' || *p == '\r' || *p == '\n' || *p == '#' || *p == ';')
+			continue;
+
+		option[0] = '\0';
+		value[0] = '\0';
+		items = sscanf(p, "%63s %127s", option, value);
+		if (items < 1)
+			continue;
+
+		if (option[0] == '-' && option[1] == '-')
+			memmove(option, option + 2, strlen(option + 2) + 1);
+
+		if (strcmp(option, "dev") == 0) {
+			if (items < 2 || strcmp(value, required_dev) != 0)
+				return 0;
+			has_dev = 1;
+		} else if (strcmp(option, "server") == 0 || strcmp(option, "server-bridge") == 0) {
+			has_server = 1;
+		} else if (strcmp(option, "mode") == 0 && items > 1 && strcmp(value, "server") == 0) {
+			has_server = 1;
+		}
+	}
+
+	return (has_dev && has_server && !in_inline) ? 1 : 0;
+}
+
+static int
+openvpn_create_custom_server_conf(const char *conf_file, int is_tun)
+{
+	FILE *fp_src, *fp_dst;
+	char source_file[128], line[512];
+
+	snprintf(source_file, sizeof(source_file), "%s/%s", SERVER_CERT_DIR, SERVER_CUSTOM_CONF);
+	fp_src = fopen(source_file, "r");
+	if (!fp_src) {
+		logmessage(LOGNAME, "Unable to start %s: custom configuration not found!", SERVER_LOG_NAME);
+		return 1;
+	}
+
+	if (!openvpn_validate_custom_server_conf(fp_src, is_tun)) {
+		logmessage(LOGNAME, "Unable to start %s: invalid custom configuration!", SERVER_LOG_NAME);
+		fclose(fp_src);
+		return 1;
+	}
+
+	rewind(fp_src);
+	fp_dst = fopen(conf_file, "w+");
+	if (!fp_dst) {
+		fclose(fp_src);
+		return 1;
+	}
+
+	{
+		int in_inline = 0;
+		while (fgets(line, sizeof(line), fp_src)) {
+			char option[64], *p = line;
+
+			while (*p == ' ' || *p == '\t')
+				p++;
+			if (*p == '<') {
+				in_inline = (p[1] == '/') ? 0 : 1;
+				fputs(line, fp_dst);
+				continue;
+			}
+			if (!in_inline && sscanf(p, "%63s", option) == 1) {
+				if (option[0] == '-' && option[1] == '-')
+					memmove(option, option + 2, strlen(option + 2) + 1);
+				if (openvpn_custom_option_forbidden(option))
+					continue;
+			}
+			fputs(line, fp_dst);
+		}
+	}
+
+	fprintf(fp_dst, "\n### Padavan runtime params:\n");
+	fprintf(fp_dst, "user %s\n", SYS_USER_NOBODY);
+	fprintf(fp_dst, "group %s\n", SYS_GROUP_NOGROUP);
+	fprintf(fp_dst, "script-security %d\n", 2);
+	fprintf(fp_dst, "tmp-dir %s\n", COMMON_TEMP_DIR);
+	fprintf(fp_dst, "writepid %s\n", SERVER_PID_FILE);
+	fprintf(fp_dst, "client-connect %s\n", SCRIPT_OVPN_SERVER);
+	fprintf(fp_dst, "client-disconnect %s\n", SCRIPT_OVPN_SERVER);
+
+	fclose(fp_dst);
+	fclose(fp_src);
+	chmod(conf_file, 0600);
+
+	return 0;
+}
+
+static int
 openvpn_create_server_conf(const char *conf_file, int is_tun)
 {
 	FILE *fp;
@@ -343,6 +493,9 @@ openvpn_create_server_conf(const char *conf_file, int is_tun)
 	char *lanip, *lannm, *wins, *dns1, *dns2;
 	const char *p_prot;
 	struct in_addr pool_in;
+
+	if (nvram_get_int("vpns_ov_custom") == 1)
+		return openvpn_create_custom_server_conf(conf_file, is_tun);
 
 	i_atls = nvram_get_int("vpns_ov_atls");
 	i_tcv2 = nvram_get_int("vpns_ov_tcv2");
@@ -582,7 +735,7 @@ openvpn_create_client_conf(const char *conf_file, int is_tun)
 	fprintf(fp, "dev %s\n", (is_tun) ? IFNAME_CLIENT_TUN : IFNAME_CLIENT_TAP);
 
 	fprintf(fp, "ca %s/%s\n", CLIENT_CERT_DIR, openvpn_client_keys[0]);
-	if (i_auth == 0) {
+	if (i_auth != 1) {
 		fprintf(fp, "cert %s/%s\n", CLIENT_CERT_DIR, openvpn_client_keys[1]);
 		fprintf(fp, "key %s/%s\n", CLIENT_CERT_DIR, openvpn_client_keys[2]);
 	}
@@ -599,7 +752,7 @@ openvpn_create_client_conf(const char *conf_file, int is_tun)
 	openvpn_add_cipher(fp, nvram_get_int("vpnc_ov_ciph"), nvram_get("vpnc_ov_ncp_clist"));
 	openvpn_add_compress(fp, nvram_get_int("vpnc_ov_compress"), 0);
 
-	if (i_auth == 1) {
+	if (i_auth != 0) {
 		fprintf(fp, "auth-user-pass %s\n", "secret");
 		openvpn_create_client_secret("secret");
 	}
