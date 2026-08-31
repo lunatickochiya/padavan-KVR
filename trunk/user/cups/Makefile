@@ -128,13 +128,13 @@ package_brlaser:
 		-DCOMPILER_SUPPORT__fstack_protector_strong=FALSE \
 		-DCMAKE_C_FLAGS="$(BRLASER_CFLAGS)" \
 		-DCMAKE_CXX_FLAGS="$(BRLASER_CFLAGS) -static-libstdc++ -static-libgcc" \
-		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS) $(CPUFLAGS) -Wl,--gc-sections -static-libstdc++ -static-libgcc -L$(STAGEDIR)/lib" \
+		-DCMAKE_EXE_LINKER_FLAGS="$(LDFLAGS) $(CPUFLAGS) -Wl,--gc-sections,-rpath-link=$(STAGEDIR)/lib -static-libstdc++ -static-libgcc -L$(STAGEDIR)/lib" \
 		-DCUPS_DATA_DIR=/usr/share/cups \
 		-DCUPS_SERVER_BIN=/usr/lib/cups \
 		-DCUPS_CONFIG=$(PKGDIR)/usr/bin/cups-config \
 		-DCUPS_CFLAGS=-I$(PKGDIR)/usr/include \
 		-DCUPS_LDFLAGS="-L$(PKGDIR)/usr/lib -L$(STAGEDIR)/lib" \
-		-DCUPS_LIBS="-L$(PKGDIR)/usr/lib;-L$(STAGEDIR)/lib;-lcupsimage;-lcups;-lz;-lpthread"
+		-DCUPS_LIBS="-L$(PKGDIR)/usr/lib;-L$(STAGEDIR)/lib;-lcupsimage;-lcups;-liconv;-lz;-lpthread"
 	$(MAKE) -C $(BRLASER_BUILD) rastertobrlaser
 	$(STRIP) --strip-unneeded $(BRLASER_BUILD)/rastertobrlaser 2>/dev/null || true
 	mkdir -p $(BRLASER_PPD)
