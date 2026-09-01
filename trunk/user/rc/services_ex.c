@@ -297,6 +297,13 @@ start_dns_dhcpd(int is_ap_mode)
 	char dhcp_start[32], dhcp_end[32], dns_all[64], dnsv6[40];
 	char *ipaddr, *netmask, *gw, *dns1, *dns2, *dns3, *wins, *domain, *dns6;
 	const char *storage_dir = "/etc/storage/dnsmasq";
+#if defined (BOARD_MSG1500_7615)
+	int mwan_dhcp_enable = 0;
+	char mwan_ip[16], mwan_start[16], mwan_end[16];
+	const char *mwan_dns1, *mwan_dns2;
+	struct in_addr mwan_addr;
+	unsigned int mwan_network;
+#endif
 
 	i_dhcp_enable = is_dhcpd_enabled(is_ap_mode);
 	i_verbose = nvram_get_int("dhcp_verbose");
@@ -304,6 +311,24 @@ start_dns_dhcpd(int is_ap_mode)
 	ipaddr  = nvram_safe_get("lan_ipaddr");
 	netmask = nvram_safe_get("lan_netmask");
 	domain  = nvram_safe_get("lan_domain");
+
+#if defined (BOARD_MSG1500_7615)
+	if (!is_ap_mode && nvram_match("mwan_enable", "1")) {
+		snprintf(mwan_ip, sizeof(mwan_ip), "%s", nvram_safe_get("mwan_lan_ip"));
+		if (!is_valid_ipv4(mwan_ip) || inet_aton(mwan_ip, &mwan_addr) == 0 ||
+		    (ntohl(mwan_addr.s_addr) & 0xff) == 0 ||
+		    (ntohl(mwan_addr.s_addr) & 0xff) == 0xff) {
+			snprintf(mwan_ip, sizeof(mwan_ip), "%s", "192.168.77.1");
+			inet_aton(mwan_ip, &mwan_addr);
+		}
+		mwan_network = ntohl(mwan_addr.s_addr) & 0xffffff00;
+		mwan_addr.s_addr = htonl(mwan_network | 100);
+		snprintf(mwan_start, sizeof(mwan_start), "%s", inet_ntoa(mwan_addr));
+		mwan_addr.s_addr = htonl(mwan_network | 249);
+		snprintf(mwan_end, sizeof(mwan_end), "%s", inet_ntoa(mwan_addr));
+		mwan_dhcp_enable = 1;
+	}
+#endif
 
 	/* touch dnsmasq.leases if not exist */
 	create_file(DHCPD_LEASE_FILE);
@@ -419,6 +444,26 @@ start_dns_dhcpd(int is_ap_mode)
 		
 		is_dhcp_used |= 0x1;
 	}
+
+#if defined (BOARD_MSG1500_7615)
+	if (mwan_dhcp_enable) {
+		mwan_dns1 = nvram_safe_get("mwan_dns1");
+		mwan_dns2 = nvram_safe_get("mwan_dns2");
+		if (!is_valid_ipv4(mwan_dns1))
+			mwan_dns1 = "223.5.5.5";
+		if (!is_valid_ipv4(mwan_dns2))
+			mwan_dns2 = "1.1.1.1";
+
+		fprintf(fp, "interface=%s\n"
+			    "listen-address=%s\n"
+			    "dhcp-range=set:mwan2,%s,%s,255.255.255.0,86400\n"
+			    "dhcp-option=tag:mwan2,3,%s\n"
+			    "dhcp-option=tag:mwan2,6,%s,%s\n",
+			    "br1", mwan_ip, mwan_start, mwan_end, mwan_ip,
+			    mwan_dns1, mwan_dns2);
+		is_dhcp_used |= 0x1;
+	}
+#endif
 
 #if defined (USE_IPV6)
 	if (!is_ap_mode && is_lan_radv_on() == 1) {
@@ -1190,4 +1235,3 @@ manual_ddns_hostname_check(void)
 {
 	nvram_set_temp("ddns_return_code", "inadyn_unsupport");
 }
-

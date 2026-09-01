@@ -491,6 +491,10 @@ tablink[0] = new Array("", "Advanced_Wireless2g_Content.asp", "Advanced_WGuest2g
 tablink[1] = new Array("", "Advanced_Wireless_Content.asp", "Advanced_WGuest_Content.asp", "Advanced_WMode_Content.asp", "Advanced_ACL_Content.asp", "Advanced_WSecurity_Content.asp", "Advanced_WAdvanced_Content.asp");
 tablink[2] = new Array("", "Advanced_LAN_Content.asp", "Advanced_DHCP_Content.asp", "Advanced_GWStaticRoute_Content.asp", "Advanced_IPTV_Content.asp", "Advanced_Switch_Content.asp", "Advanced_WOL_Content.asp");
 tablink[3] = new Array("", "Advanced_WAN_Content.asp", "Advanced_IPv6_Content.asp", "Advanced_VirtualServer_Content.asp", "Advanced_Exposed_Content.asp", "Advanced_DDNS_Content.asp");
+if (support_mwan_switch()) {
+	tabtitle[3].push("双 WAN 分流");
+	tablink[3].push("Advanced_MWAN_Content.asp");
+}
 tablink[4] = new Array("", "Advanced_BasicFirewall_Content.asp", "Advanced_Netfilter_Content.asp", "Advanced_URLFilter_Content.asp", "Advanced_MACFilter_Content.asp", "Advanced_Firewall_Content.asp");
 tablink[5] = new Array("", "Advanced_AiDisk_others.asp", "Advanced_AiDisk_samba.asp", "Advanced_AiDisk_ftp.asp", "Advanced_Modem_others.asp", "Advanced_Printer_others.asp");
 tablink[6] = new Array("", "Advanced_System_Content.asp", "Advanced_Services_Content.asp", "Advanced_OperationMode_Content.asp", "Advanced_FirmwareUpgrade_Content.asp", "Advanced_SettingBackup_Content.asp", "Advanced_Console_Content.asp");
@@ -831,8 +835,8 @@ function show_menu(L1, L2, L3){
 	if(sw_mode == '3'){
 		tabtitle[2].splice(3,1);//LAN
 		tablink[2].splice(3,1);
-		tabtitle[3].splice(1,5);//WAN
-		tablink[3].splice(1,5);
+		tabtitle[3].splice(1, tabtitle[3].length - 1);//WAN
+		tablink[3].splice(1, tablink[3].length - 1);
 		tabtitle[4].splice(1,5);//firewall
 		tablink[4].splice(1,5);
 		tabtitle[5].splice(4,1);//USB

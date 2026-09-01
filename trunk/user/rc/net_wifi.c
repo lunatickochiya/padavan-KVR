@@ -31,6 +31,30 @@
 #include "switch.h"
 #include "gpio_pins.h"
 
+#if defined (BOARD_MSG1500_7615)
+#define IFNAME_MWAN_BR "br1"
+
+static const char *
+get_main_ap_bridge(int is_5ghz)
+{
+	const char *route = nvram_safe_get((is_5ghz) ? "mwan_wifi5" : "mwan_wifi24");
+
+	if (nvram_match("mwan_enable", "1") && !strcmp(route, "wan2") &&
+	    is_interface_exist(IFNAME_MWAN_BR))
+		return IFNAME_MWAN_BR;
+
+	return IFNAME_BR;
+}
+
+static void
+remove_main_ap_from_bridges(const char *ifname)
+{
+	br_add_del_if(IFNAME_BR, ifname, 0);
+	if (is_interface_exist(IFNAME_MWAN_BR))
+		br_add_del_if(IFNAME_MWAN_BR, ifname, 0);
+}
+#endif
+
 static int
 wif_control(const char *wifname, int is_up)
 {
@@ -434,7 +458,11 @@ start_wifi_ap_wl(int radio_on)
 	if (i_mode_x == 1 || i_mode_x == 3 || !radio_on)
 	{
 		br_add_del_if(IFNAME_BR, IFNAME_5G_GUEST, 0);
+#if defined (BOARD_MSG1500_7615)
+		remove_main_ap_from_bridges(IFNAME_5G_MAIN);
+#else
 		br_add_del_if(IFNAME_BR, IFNAME_5G_MAIN, 0);
+#endif
 	}
 
 	mlme_state_wl(radio_on);
@@ -443,7 +471,12 @@ start_wifi_ap_wl(int radio_on)
 	if (radio_on && i_mode_x != 1 && i_mode_x != 3)
 	{
 		wif_control(IFNAME_5G_MAIN, 1);
+#if defined (BOARD_MSG1500_7615)
+		remove_main_ap_from_bridges(IFNAME_5G_MAIN);
+		br_add_del_if(get_main_ap_bridge(1), IFNAME_5G_MAIN, 1);
+#else
 		br_add_del_if(IFNAME_BR, IFNAME_5G_MAIN, 1);
+#endif
 		wif_control_m2u(1, IFNAME_5G_MAIN);
 		
 		if (is_guest_allowed_wl())
@@ -472,7 +505,11 @@ start_wifi_ap_rt(int radio_on)
 			br_add_del_if(IFNAME_BR, IFNAME_INIC_GUEST_VLAN, 0);
 #else
 		br_add_del_if(IFNAME_BR, IFNAME_2G_GUEST, 0);
+#if defined (BOARD_MSG1500_7615)
+		remove_main_ap_from_bridges(IFNAME_2G_MAIN);
+#else
 		br_add_del_if(IFNAME_BR, IFNAME_2G_MAIN, 0);
+#endif
 #endif
 	}
 
@@ -498,7 +535,12 @@ start_wifi_ap_rt(int radio_on)
 	if (radio_on && i_mode_x != 1 && i_mode_x != 3)
 	{
 		wif_control(IFNAME_2G_MAIN, 1);
+#if defined (BOARD_MSG1500_7615)
+		remove_main_ap_from_bridges(IFNAME_2G_MAIN);
+		br_add_del_if(get_main_ap_bridge(0), IFNAME_2G_MAIN, 1);
+#else
 		br_add_del_if(IFNAME_BR, IFNAME_2G_MAIN, 1);
+#endif
 		wif_control_m2u(0, IFNAME_2G_MAIN);
 		
 		if (is_guest_allowed_rt())
@@ -1479,4 +1521,3 @@ timecheck_wifi(int is_aband, const char *nv_date, const char *nv_time1, const ch
 
 	return 0;
 }
-

@@ -3213,6 +3213,12 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		has_2g_11ax
 	);
 
+#if defined (BOARD_MSG1500_7615)
+	websWrite(wp, "function support_mwan_switch() { return 1;}\n");
+#else
+	websWrite(wp, "function support_mwan_switch() { return 0;}\n");
+#endif
+
 	return 0;
 }
 

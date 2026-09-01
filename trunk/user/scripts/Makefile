@@ -20,6 +20,7 @@ ifeq ($(CONFIG_FIRMWARE_PRODUCT_ID),"MSG1500-7615")
 	sed -i -e 's/size_tmp="24M"/size_tmp="120M"/' -e 's/size_etc="6M"/size_etc="17M"/' $(ROMFSDIR)/sbin/dev_init.sh
 	sed -i 's/mtd_part_size=65536/mtd_part_size=17825792/' $(ROMFSDIR)/sbin/mtd_storage.sh
 	$(ROMFSINST) -d -S -p 644 $(THISDIR)/bg1.jpg /etc_ro/bg/wood.jpg
+	$(ROMFSINST) -p +x $(THISDIR)/mwan-switch.sh /usr/bin/mwan-switch.sh
 	test -s $(ROMFSDIR)/etc_ro/bg/wood.jpg
 endif
 ifeq ($(STORAGE_ENABLED),y)

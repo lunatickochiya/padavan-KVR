@@ -106,6 +106,21 @@ struct nvram_pair router_defaults[] = {
 	{ "vlan_tag_lan4", "0" },
 	{ "x_DHCPClient", "1" },
 
+#if defined (BOARD_MSG1500_7615)
+	/* MSG1500-7615 dual-WAN port and client routing. */
+	{ "mwan_enable", "0" },
+	{ "mwan_proto", "dhcp" },
+	{ "mwan_ipaddr", "0.0.0.0" },
+	{ "mwan_netmask", "255.255.255.0" },
+	{ "mwan_gateway", "0.0.0.0" },
+	{ "mwan_dns1", "223.5.5.5" },
+	{ "mwan_dns2", "1.1.1.1" },
+	{ "mwan_lan_ip", "192.168.77.1" },
+	{ "mwan_lan4", "wan1" },
+	{ "mwan_wifi24", "wan1" },
+	{ "mwan_wifi5", "wan1" },
+#endif
+
 	/* VLAN IPTV path */
 	{ "viptv_mode", "0" },
 	{ "viptv_ipaddr", "0.0.0.0" },

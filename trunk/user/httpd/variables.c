@@ -580,6 +580,23 @@
 			{0,0,0,0}
 		};
 
+#if defined (BOARD_MSG1500_7615)
+	struct variable variables_MwanSwitchConf[] = {
+			{"mwan_enable", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_proto", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_ipaddr", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_netmask", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_gateway", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_dns1", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_dns2", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_lan_ip", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_lan4", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_wifi24", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_wifi5", "", NULL, EVM_RESTART_REBOOT},
+			{0,0,0,0}
+		};
+#endif
+
 	struct variable variables_LANHostConfig[] = {
 			{"lan_proto_x", "", NULL, EVM_RESTART_LAN},
 			{"lan_dhcpd_x", "", NULL, EVM_RESTART_DHCPD},
@@ -1716,6 +1733,9 @@
 		{"EthernetLink",		variables_EthernetLink},
 		{"FirewallConfig",		variables_FirewallConfig},
 		{"RouterConfig",		variables_RouterConfig},
+#if defined (BOARD_MSG1500_7615)
+		{"MwanSwitchConf",	variables_MwanSwitchConf},
+#endif
 		{"WLANConfig11a",		variables_WLANConfig11a},
 		{"WLANConfig11b",		variables_WLANConfig11b},
 		{"DeviceSecurity11a",		variables_DeviceSecurity11a},

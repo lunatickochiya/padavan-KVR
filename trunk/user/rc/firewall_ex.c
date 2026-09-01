@@ -2203,6 +2203,11 @@ start_firewall_ex(void)
 	if (check_if_file_exist(opt_iptables_script))
 		doSystem("%s update", opt_iptables_script);
 
+#if defined (BOARD_MSG1500_7615)
+	if (nvram_match("mwan_enable", "1") && check_if_file_exist("/usr/bin/mwan-switch.sh"))
+		doSystem("%s firewall", "/usr/bin/mwan-switch.sh");
+#endif
+
 	/* enable IPv4 forward */
 	set_ipv4_forward(1);
 
@@ -2213,4 +2218,3 @@ start_firewall_ex(void)
 	module_smart_unload("iptable_mangle", 0);
 	module_smart_unload("ip6table_mangle", 0);
 }
-

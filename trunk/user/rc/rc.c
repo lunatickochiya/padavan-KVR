@@ -935,6 +935,12 @@ init_router(void)
 
 	start_services_once(is_ap_mode);
 
+#if defined (BOARD_MSG1500_7615)
+	if (!is_ap_mode && nvram_match("mwan_enable", "1") &&
+	    check_if_file_exist("/usr/bin/mwan-switch.sh"))
+		system("/usr/bin/mwan-switch.sh start &");
+#endif
+
 	notify_leds_detect_link();
 
 	start_rwfs_optware();
@@ -2153,4 +2159,3 @@ main(int argc, char **argv)
 
 	return ret;
 }
-
