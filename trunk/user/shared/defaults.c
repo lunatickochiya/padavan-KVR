@@ -110,6 +110,8 @@ struct nvram_pair router_defaults[] = {
 	/* MSG1500-7615 dual-WAN port and client routing. */
 	{ "mwan_enable", "0" },
 	{ "mwan_proto", "dhcp" },
+	{ "mwan_pppoe_username", "" },
+	{ "mwan_pppoe_passwd", "" },
 	{ "mwan_ipaddr", "0.0.0.0" },
 	{ "mwan_netmask", "255.255.255.0" },
 	{ "mwan_gateway", "0.0.0.0" },

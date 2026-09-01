@@ -52,8 +52,10 @@ function initial() {
 function update_visibility() {
 	var enabled = document.form.mwan_enable[0].checked;
 	var static_mode = document.form.mwan_proto.value == 'static';
+	var pppoe_mode = document.form.mwan_proto.value == 'pppoe';
 	showhide_div('mwan_settings', enabled);
 	showhide_div('static_settings', enabled && static_mode);
+	showhide_div('pppoe_settings', enabled && pppoe_mode);
 }
 
 function update_status() {
@@ -67,6 +69,12 @@ function update_status() {
 			style = 'success';
 		} else if (wan2_state == 'route_error') {
 			text = '地址已取得，但策略路由建立失败';
+			style = 'important';
+		} else if (wan2_state == 'config_error') {
+			text = 'PPPoE 拨号配置生成失败';
+			style = 'important';
+		} else if (wan2_state == 'dial_error') {
+			text = 'PPPoE 拨号进程启动失败';
 			style = 'important';
 		} else {
 			text = '正在连接或尚未取得地址';
@@ -120,6 +128,21 @@ function validForm() {
 			document.form.mwan_ipaddr.focus();
 			return false;
 		}
+	}
+	if (document.form.mwan_proto.value == 'pppoe') {
+		if (document.form.mwan_pppoe_username.value.length == 0) {
+			alert('请输入 WAN2 PPPoE 宽带账号。');
+			document.form.mwan_pppoe_username.focus();
+			return false;
+		}
+		if (document.form.mwan_pppoe_passwd.value.length == 0) {
+			alert('请输入 WAN2 PPPoE 宽带密码。');
+			document.form.mwan_pppoe_passwd.focus();
+			return false;
+		}
+		if (!validate_string(document.form.mwan_pppoe_username) ||
+		    !validate_string(document.form.mwan_pppoe_passwd))
+			return false;
 	}
 	return true;
 }
@@ -193,6 +216,7 @@ function applyRule() {
 										<tr><th width="50%">接入方式</th><td>
 											<select name="mwan_proto" class="input" onchange="update_visibility();">
 												<option value="dhcp" <% nvram_match_x("", "mwan_proto", "dhcp", "selected"); %>>自动获取 IP（DHCP）</option>
+												<option value="pppoe" <% nvram_match_x("", "mwan_proto", "pppoe", "selected"); %>>宽带拨号（PPPoE）</option>
 												<option value="static" <% nvram_match_x("", "mwan_proto", "static", "selected"); %>>静态 IP</option>
 											</select>
 										</td></tr>
@@ -202,6 +226,12 @@ function applyRule() {
 											<tr><th width="50%">WAN2 IP 地址</th><td><input type="text" name="mwan_ipaddr" maxlength="15" class="input" value="<% nvram_get_x("", "mwan_ipaddr"); %>" onkeypress="return is_ipaddr(this,event);" /></td></tr>
 											<tr><th>WAN2 子网掩码</th><td><input type="text" name="mwan_netmask" maxlength="15" class="input" value="<% nvram_get_x("", "mwan_netmask"); %>" onkeypress="return is_ipaddr(this,event);" /></td></tr>
 											<tr><th>WAN2 网关</th><td><input type="text" name="mwan_gateway" maxlength="15" class="input" value="<% nvram_get_x("", "mwan_gateway"); %>" onkeypress="return is_ipaddr(this,event);" /></td></tr>
+										</table>
+									</div>
+									<div id="pppoe_settings">
+										<table width="100%" cellpadding="4" cellspacing="0" class="table">
+											<tr><th width="50%">WAN2 PPPoE 账号</th><td><input type="text" name="mwan_pppoe_username" maxlength="64" class="input" autocomplete="off" value="<% nvram_get_x("", "mwan_pppoe_username"); %>" onkeypress="return is_string(this,event);" /></td></tr>
+											<tr><th>WAN2 PPPoE 密码</th><td><input type="password" name="mwan_pppoe_passwd" maxlength="64" class="input" autocomplete="new-password" value="<% nvram_get_x("", "mwan_pppoe_passwd"); %>" onkeypress="return is_string(this,event);" /></td></tr>
 										</table>
 									</div>
 									<table width="100%" cellpadding="4" cellspacing="0" class="table">

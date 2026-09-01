@@ -2,11 +2,17 @@
 
 APP="mwan-switch"
 WAN2_IF="eth2.3"
+WAN2_PPP_IF="ppp1"
 LAN2_IF="eth2.4"
 LAN2_BR="br1"
 ROUTE_TABLE="200"
 RULE_PRIORITY="20000"
 UDHCPC_PID="/var/run/udhcpc_mwan2.pid"
+PPPD_PID="/var/run/ppp-mwan2.pid"
+PPPD_IF_PID="/var/run/ppp1.pid"
+PPPD_OPTIONS="/tmp/ppp/options.mwan2"
+PPPD_IPUP="/tmp/ppp/mwan2-ip-up"
+PPPD_IPDOWN="/tmp/ppp/mwan2-ip-down"
 
 log()
 {
@@ -88,6 +94,8 @@ read_config()
 {
 	ENABLED="$(nvget mwan_enable)"
 	WAN2_PROTO="$(nvget mwan_proto)"
+	WAN2_PPPOE_USER="$(nvget mwan_pppoe_username)"
+	WAN2_PPPOE_PASS="$(nvget mwan_pppoe_passwd)"
 	WAN2_IP="$(nvget mwan_ipaddr)"
 	WAN2_MASK="$(nvget mwan_netmask)"
 	WAN2_GW="$(nvget mwan_gateway)"
@@ -96,13 +104,70 @@ read_config()
 	WIFI24_ROUTE="$(nvget mwan_wifi24)"
 	WIFI5_ROUTE="$(nvget mwan_wifi5)"
 
-	[ "$WAN2_PROTO" = "static" ] || WAN2_PROTO="dhcp"
+	case "$WAN2_PROTO" in
+		dhcp|static|pppoe) ;;
+		*) WAN2_PROTO="dhcp" ;;
+	esac
 	valid_lan_gateway "$LAN2_IP" || LAN2_IP="192.168.77.1"
 	LAN2_PREFIX="${LAN2_IP%.*}"
 	LAN2_NET="${LAN2_PREFIX}.0/24"
 	[ "$LAN4_ROUTE" = "wan2" ] || LAN4_ROUTE="wan1"
 	[ "$WIFI24_ROUTE" = "wan2" ] || WIFI24_ROUTE="wan1"
 	[ "$WIFI5_ROUTE" = "wan2" ] || WIFI5_ROUTE="wan1"
+}
+
+wan2_out_if()
+{
+	if [ "$WAN2_PROTO" = "pppoe" ]; then
+		echo "$WAN2_PPP_IF"
+	else
+		echo "$WAN2_IF"
+	fi
+}
+
+ppp_escape()
+{
+	printf '%s' "$1" | tr '\r\n' '  ' | sed "s/[\\\\']/\\\\&/g"
+}
+
+write_pppoe_options()
+{
+	local username password
+	username="$(ppp_escape "$WAN2_PPPOE_USER")"
+	password="$(ppp_escape "$WAN2_PPPOE_PASS")"
+	mkdir -p /tmp/ppp || return 1
+	ln -sf /usr/bin/mwan-switch.sh "$PPPD_IPUP" || return 1
+	ln -sf /usr/bin/mwan-switch.sh "$PPPD_IPDOWN" || return 1
+	{
+		echo "noauth"
+		printf "user '%s'\n" "$username"
+		printf "password '%s'\n" "$password"
+		echo "refuse-eap"
+		echo "plugin rp-pppoe.so"
+		echo "nic-$WAN2_IF"
+		echo "persist"
+		echo "maxfail 0"
+		echo "holdoff 10"
+		echo "ipcp-accept-remote ipcp-accept-local"
+		echo "noipdefault"
+		echo "nodefaultroute"
+		echo "usepeerdns"
+		echo "mtu 1492"
+		echo "mru 1492"
+		echo "default-asyncmap"
+		echo "nopcomp noaccomp"
+		echo "novj nobsdcomp nodeflate"
+		echo "nomppe nomppc"
+		echo "lcp-echo-interval 20"
+		echo "lcp-echo-failure 6"
+		echo "unit 1"
+		echo "linkname mwan2"
+		echo "ipparam mwan2"
+		echo "ip-up-script $PPPD_IPUP"
+		echo "ip-down-script $PPPD_IPDOWN"
+		echo "ktune"
+	} > "$PPPD_OPTIONS" || return 1
+	chmod 0600 "$PPPD_OPTIONS"
 }
 
 kill_pidfile()
@@ -158,16 +223,31 @@ install_wan2_route()
 	return 0
 }
 
+install_wan2_ppp_route()
+{
+	local local_ip="$1" remote_ip="$2"
+	valid_ipv4 "$local_ip" && valid_ipv4 "$remote_ip" || return 1
+
+	ip route flush table "$ROUTE_TABLE" 2>/dev/null
+	add_local_routes
+	ip route add table "$ROUTE_TABLE" "$remote_ip/32" dev "$WAN2_PPP_IF" src "$local_ip" 2>/dev/null
+	ip route add table "$ROUTE_TABLE" default via "$remote_ip" dev "$WAN2_PPP_IF" || return 1
+	ip route flush cache 2>/dev/null
+	return 0
+}
+
 apply_firewall()
 {
+	local out_if
 	read_config
 	[ "$ENABLED" = "1" ] || return 0
 	[ -d "/sys/class/net/$LAN2_BR" ] || return 0
+	out_if="$(wan2_out_if)"
 
 	iptables -t nat -N MWAN2_POST 2>/dev/null || iptables -t nat -F MWAN2_POST
 	iptables -t nat -D POSTROUTING -j MWAN2_POST 2>/dev/null
 	iptables -t nat -I POSTROUTING 1 -j MWAN2_POST
-	iptables -t nat -A MWAN2_POST -s "$LAN2_NET" -o "$WAN2_IF" -j MASQUERADE
+	iptables -t nat -A MWAN2_POST -s "$LAN2_NET" -o "$out_if" -j MASQUERADE
 
 	iptables -N MWAN2_INPUT 2>/dev/null || iptables -F MWAN2_INPUT
 	iptables -D INPUT -j MWAN2_INPUT 2>/dev/null
@@ -177,8 +257,8 @@ apply_firewall()
 	iptables -N MWAN2_FORWARD 2>/dev/null || iptables -F MWAN2_FORWARD
 	iptables -D FORWARD -j MWAN2_FORWARD 2>/dev/null
 	iptables -I FORWARD 1 -j MWAN2_FORWARD
-	iptables -A MWAN2_FORWARD -i "$LAN2_BR" -o "$WAN2_IF" -j ACCEPT
-	iptables -A MWAN2_FORWARD -i "$WAN2_IF" -o "$LAN2_BR" -m state --state ESTABLISHED,RELATED -j ACCEPT
+	iptables -A MWAN2_FORWARD -i "$LAN2_BR" -o "$out_if" -j ACCEPT
+	iptables -A MWAN2_FORWARD -i "$out_if" -o "$LAN2_BR" -m state --state ESTABLISHED,RELATED -j ACCEPT
 	iptables -A MWAN2_FORWARD -i "$LAN2_BR" -o br0 -j ACCEPT
 	iptables -A MWAN2_FORWARD -i br0 -o "$LAN2_BR" -j ACCEPT
 }
@@ -252,6 +332,12 @@ start_service()
 			log "static WAN2 subnet conflicts with a client LAN"
 			return 1
 		fi
+	elif [ "$WAN2_PROTO" = "pppoe" ]; then
+		[ -n "$WAN2_PPPOE_USER" ] && [ -n "$WAN2_PPPOE_PASS" ] || {
+			log "WAN2 PPPoE username or password is empty"
+			nvram settmp "mwan_wan2_state_t=config_error"
+			return 1
+		}
 	fi
 
 	configure_switch || {
@@ -286,6 +372,8 @@ start_service()
 	apply_firewall
 
 	kill_pidfile "$UDHCPC_PID"
+	kill_pidfile "$PPPD_PID"
+	rm -f "$PPPD_IF_PID"
 	if [ "$WAN2_PROTO" = "static" ]; then
 		ifconfig "$WAN2_IF" "$WAN2_IP" netmask "$WAN2_MASK" up
 		install_wan2_route "$WAN2_GW" || {
@@ -296,12 +384,60 @@ start_service()
 		nvram settmp "mwan_wan2_ip_t=$WAN2_IP"
 		nvram settmp "mwan_wan2_gateway_t=$WAN2_GW"
 		nvram settmp "mwan_wan2_state_t=connected"
+	elif [ "$WAN2_PROTO" = "pppoe" ]; then
+		ifconfig "$WAN2_IF" 0.0.0.0 up
+		write_pppoe_options || {
+			log "failed to write WAN2 PPPoE options"
+			nvram settmp "mwan_wan2_state_t=config_error"
+			return 1
+		}
+		nvram settmp "mwan_wan2_ip_t=0.0.0.0"
+		nvram settmp "mwan_wan2_gateway_t=0.0.0.0"
+		nvram settmp "mwan_wan2_state_t=connecting"
+		/usr/sbin/pppd file "$PPPD_OPTIONS" || {
+			log "failed to launch WAN2 PPPoE"
+			nvram settmp "mwan_wan2_state_t=dial_error"
+			return 1
+		}
 	else
 		ifconfig "$WAN2_IF" 0.0.0.0 up
 		nvram settmp "mwan_wan2_state_t=connecting"
 		udhcpc -i "$WAN2_IF" -p "$UDHCPC_PID" -s /usr/bin/mwan-switch.sh -b -t 4 -T 4 -O 6
 	fi
 	log "dual WAN started: LAN1=$WAN2_IF LAN4=$LAN4_ROUTE 2.4G=$WIFI24_ROUTE 5G=$WIFI5_ROUTE"
+}
+
+ppp_event()
+{
+	local event="$1" ppp_if="$2" local_ip="$5" remote_ip="$6"
+	read_config
+	[ "$ENABLED" = "1" ] && [ "$WAN2_PROTO" = "pppoe" ] || return 0
+	[ "$ppp_if" = "$WAN2_PPP_IF" ] && [ "${LINKNAME:-mwan2}" = "mwan2" ] || return 0
+	case "$event" in
+		up)
+			[ -e "/proc/sys/net/ipv4/conf/$WAN2_PPP_IF/rp_filter" ] &&
+				echo 0 > "/proc/sys/net/ipv4/conf/$WAN2_PPP_IF/rp_filter"
+			install_wan2_ppp_route "$local_ip" "$remote_ip" || {
+				log "failed to install PPPoE WAN2 route"
+				nvram settmp "mwan_wan2_state_t=route_error"
+				return 1
+			}
+			nvram settmp "mwan_wan2_ip_t=$local_ip"
+			nvram settmp "mwan_wan2_gateway_t=$remote_ip"
+			nvram settmp "mwan_wan2_state_t=connected"
+			apply_firewall
+			log "WAN2 PPPoE connected: $local_ip via $remote_ip"
+			;;
+		down)
+			ip route flush table "$ROUTE_TABLE" 2>/dev/null
+			add_local_routes
+			ip route flush cache 2>/dev/null
+			nvram settmp "mwan_wan2_ip_t=0.0.0.0"
+			nvram settmp "mwan_wan2_gateway_t=0.0.0.0"
+			nvram settmp "mwan_wan2_state_t=connecting"
+			log "WAN2 PPPoE disconnected"
+			;;
+	esac
 }
 
 dhcp_event()
@@ -349,9 +485,15 @@ dhcp_event()
 	esac
 }
 
-case "$1" in
-	start) start_service ;;
-	firewall) apply_firewall ;;
-	deconfig|bound|renew) dhcp_event "$1" ;;
-	*) echo "Usage: $0 {start|firewall}" >&2; exit 1 ;;
+case "${0##*/}" in
+	mwan2-ip-up) ppp_event up "$@" ;;
+	mwan2-ip-down) ppp_event down "$@" ;;
+	*)
+		case "$1" in
+			start) start_service ;;
+			firewall) apply_firewall ;;
+			deconfig|bound|renew) dhcp_event "$1" ;;
+			*) echo "Usage: $0 {start|firewall}" >&2; exit 1 ;;
+		esac
+		;;
 esac

@@ -584,6 +584,8 @@
 	struct variable variables_MwanSwitchConf[] = {
 			{"mwan_enable", "", NULL, EVM_RESTART_REBOOT},
 			{"mwan_proto", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_pppoe_username", "", NULL, EVM_RESTART_REBOOT},
+			{"mwan_pppoe_passwd", "", NULL, EVM_RESTART_REBOOT},
 			{"mwan_ipaddr", "", NULL, EVM_RESTART_REBOOT},
 			{"mwan_netmask", "", NULL, EVM_RESTART_REBOOT},
 			{"mwan_gateway", "", NULL, EVM_RESTART_REBOOT},
