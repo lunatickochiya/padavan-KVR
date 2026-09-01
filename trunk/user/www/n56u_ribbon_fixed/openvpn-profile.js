@@ -217,6 +217,7 @@
 		}
 
 		var hasPassword = !!directives['auth-user-pass'];
+		var passwordArgs = firstDirective(directives, 'auth-user-pass');
 		var hasCertificate = !!(sections.cert && sections.key);
 		if ((sections.cert && !sections.key) || (!sections.cert && sections.key)) {
 			result.error = 'certificate';
@@ -228,6 +229,7 @@
 		}
 
 		result.auth = hasPassword ? (hasCertificate ? 2 : 1) : 0;
+		result.passwordFile = passwordArgs && passwordArgs[0] ? passwordArgs[0] : '';
 		result.ca = sections.ca;
 		result.cert = sections.cert || '';
 		result.key = sections.key || '';

@@ -26,7 +26,7 @@ var $j = jQuery.noConflict();
 $j(document).ready(function() {
 	init_itoggle('vpnc_enable', change_vpnc_enabled);
 
-	$j("#tab_vpnc_cfg, #tab_vpnc_ssl").click(function(){
+	$j("#tab_vpnc_cfg, #tab_vpnc_ssl, #tab_vpnc_auth").click(function(){
 		var newHash = $j(this).attr('href').toLowerCase();
 		showTab(newHash);
 		return false;
@@ -41,19 +41,26 @@ lan_netmask_x = '<% nvram_get_x("", "lan_netmask"); %>';
 fw_enable_x = '<% nvram_get_x("", "fw_enable_x"); %>';
 vpnc_state_last = '<% nvram_get_x("", "vpnc_state_t"); %>';
 ip6_service = '<% nvram_get_x("", "ip6_service"); %>';
+var openvpn_page = /(?:^|[?&])openvpn=1(?:&|$)/.test(location.search);
 
 <% login_state_hook(); %>
 <% openvpn_cli_cert_hook(); %>
 
 function initial(){
 	show_banner(0);
-	show_menu(4, -1, 0);
+	show_menu(openvpn_page ? 9 : 4, -1, 0);
 	show_footer();
+	if (openvpn_page)
+		$('vpnc_page_title').innerHTML = '<#menu_openvpn_client#>';
 
-	if (!found_app_ovpn())
+	if (openvpn_page) {
+		document.form.vpnc_type.value = "2";
+		showhide_div('row_vpnc_type', 0);
+	} else {
 		document.form.vpnc_type.remove(2);
-	else
-	if (!support_ipv6() || ip6_service == ''){
+	}
+
+	if (found_app_ovpn() && (!support_ipv6() || ip6_service == '')){
 		var o = document.form.vpnc_ov_prot;
 		for (var i = 0; i < 4; i++) {
 			o.remove(2);
@@ -83,7 +90,7 @@ function applyRule(){
 		showLoading();
 		
 		document.form.action_mode.value = " Apply ";
-		document.form.current_page.value = "/vpncli.asp";
+		document.form.current_page.value = openvpn_page ? "/vpncli.asp?openvpn=1" : "/vpncli.asp";
 		document.form.next_page.value = "";
 		
 		document.form.submit();
@@ -139,7 +146,7 @@ function validForm(){
 	if (mode == "2") {
 		if(!validate_range(document.form.vpnc_ov_port, 1, 65535))
 			return false;
-		if (document.form.vpnc_ov_auth.value != "0") {
+		if (document.form.vpnc_ov_auth.value != "0" && document.form.vpnc_ov_passfile.value == "0") {
 			if (document.form.vpnc_user.value.length < 1) {
 				alert("<#OVPN_Username_Required#>");
 				document.form.vpnc_user.focus();
@@ -150,6 +157,16 @@ function validForm(){
 			if (document.form.vpnc_pass.value.length < 1) {
 				alert("<#OVPN_Password_Required#>");
 				document.form.vpnc_pass.focus();
+				return false;
+			}
+		}
+		if (document.form.vpnc_ov_auth.value != "0" && document.form.vpnc_ov_passfile.value != "0") {
+			var passfile = document.form['ovpncli.password-' + document.form.vpnc_ov_passfile.value + '.txt'];
+			var lines = passfile.value.replace(/\r\n?/g, '\n').split('\n');
+			if (lines.length < 2 || lines[0].length < 1 || lines[1].length < 1) {
+				alert("<#OVPN_Client_Password_File_Invalid#>");
+				showTab('#auth');
+				passfile.focus();
 				return false;
 			}
 		}
@@ -176,6 +193,8 @@ function textarea_ovpn_enabled(v){
 	inputCtrl(document.form['ovpncli.client.crt'], v);
 	inputCtrl(document.form['ovpncli.client.key'], v);
 	inputCtrl(document.form['ovpncli.ta.key'], v);
+	for (var i = 1; i <= 5; i++)
+		inputCtrl(document.form['ovpncli.password-' + i + '.txt'], v);
 	inputCtrl($('vpnc_ovpn_file'), v);
 }
 
@@ -221,6 +240,8 @@ function import_openvpn_client_profile(input) {
 		document.form.vpnc_ov_prot.value = (!support_ipv6() && profile.protocol > 1) ? (profile.protocol & 1) : profile.protocol;
 		document.form.vpnc_ov_mode.value = profile.mode;
 		document.form.vpnc_ov_auth.value = profile.auth;
+		var passMatch = String(profile.passwordFile || '').match(/^password-([1-5])\.txt$/);
+		document.form.vpnc_ov_passfile.value = passMatch ? passMatch[1] : "0";
 		document.form.vpnc_ov_atls.value = profile.tlsMode;
 		document.form['ovpncli.ca.crt'].value = profile.ca;
 		document.form['ovpncli.client.crt'].value = profile.cert;
@@ -244,6 +265,7 @@ function change_vpnc_enabled() {
 
 	if (!v){
 		showhide_div('tab_vpnc_ssl', 0);
+		showhide_div('tab_vpnc_auth', 0);
 		showhide_div('tbl_vpnc_route', 0);
 		textarea_ovpn_enabled(0);
 	}else{
@@ -285,6 +307,8 @@ function change_vpnc_type() {
 	}
 	else {
 		showhide_div('row_vpnc_ov_cnat', 0);
+		showhide_div('row_vpnc_ov_passfile', 0);
+		showhide_div('tab_vpnc_auth', 0);
 		
 		showhide_div('row_vpnc_user', 1);
 		showhide_div('row_vpnc_pass', 1);
@@ -297,9 +321,12 @@ function change_vpnc_ov_auth() {
 	var auth = document.form.vpnc_ov_auth.value;
 	var use_password = (auth != "0") ? 1 : 0;
 	var use_certificate = (auth != "1") ? 1 : 0;
+	var use_nvram_password = (use_password && document.form.vpnc_ov_passfile.value == "0") ? 1 : 0;
 
-	showhide_div('row_vpnc_user', use_password);
-	showhide_div('row_vpnc_pass', use_password);
+	showhide_div('row_vpnc_ov_passfile', use_password);
+	showhide_div('row_vpnc_user', use_nvram_password);
+	showhide_div('row_vpnc_pass', use_nvram_password);
+	showhide_div('tab_vpnc_auth', use_password);
 	showhide_div('row_client_key', use_certificate);
 	showhide_div('row_client_crt', use_certificate);
 }
@@ -315,7 +342,7 @@ function change_vpnc_ov_mode() {
 	showhide_div('row_vpnc_ov_cnat', (document.form.vpnc_ov_mode.value == "1") ? 0 : 1);
 }
 
-var arrHashes = ["cfg", "ssl"];
+var arrHashes = ["cfg", "ssl", "auth"];
 
 function showTab(curHash){
 	var obj = $('tab_vpnc_'+curHash.slice(1));
@@ -404,7 +431,7 @@ function getHash(){
              <div class="span9">
                 <div class="box well grad_colour_dark_blue">
                     <div id="tabMenu"></div>
-                    <h2 class="box_head round_top"><#menu6#></h2>
+                    <h2 id="vpnc_page_title" class="box_head round_top"><#menu6#></h2>
 
                     <div class="round_bottom">
 
@@ -415,6 +442,9 @@ function getHash(){
                                 </li>
                                 <li>
                                     <a id="tab_vpnc_ssl" href="#ssl" style="display:none"><#OVPN_Cert#></a>
+                                </li>
+                                <li>
+                                    <a id="tab_vpnc_auth" href="#auth" style="display:none"><#OVPN_Client_Password_Files#></a>
                                 </li>
                             </ul>
                         </div>
@@ -441,7 +471,7 @@ function getHash(){
                                 <tr>
                                     <th colspan="2" style="background-color: rgba ( 171 , 168 , 167 , 0.2 );"><#VPNC_Base#></th>
                                 </tr>
-                                <tr>
+                                <tr id="row_vpnc_type">
                                     <th width="50%"><#VPNC_Type#></th>
                                     <td>
                                         <select name="vpnc_type" class="input" onchange="change_vpnc_type();">
@@ -496,6 +526,19 @@ function getHash(){
 	                                            <option value="1" <% nvram_match_x("", "vpnc_ov_auth", "1","selected"); %>><#OVPN_Auth_Password#></option>
 	                                            <option value="2" <% nvram_match_x("", "vpnc_ov_auth", "2","selected"); %>><#OVPN_Auth_CertificatePassword#></option>
 	                                        </select>
+                                    </td>
+                                </tr>
+                                <tr id="row_vpnc_ov_passfile" style="display:none">
+                                    <th><#OVPN_Client_Password_File#></th>
+                                    <td>
+	                                    <select name="vpnc_ov_passfile" class="input" onchange="change_vpnc_ov_auth();">
+	                                        <option value="0" <% nvram_match_x("", "vpnc_ov_passfile", "0","selected"); %>><#OVPN_Client_Password_NVRAM#></option>
+	                                        <option value="1" <% nvram_match_x("", "vpnc_ov_passfile", "1","selected"); %>>password-1.txt</option>
+	                                        <option value="2" <% nvram_match_x("", "vpnc_ov_passfile", "2","selected"); %>>password-2.txt</option>
+	                                        <option value="3" <% nvram_match_x("", "vpnc_ov_passfile", "3","selected"); %>>password-3.txt</option>
+	                                        <option value="4" <% nvram_match_x("", "vpnc_ov_passfile", "4","selected"); %>>password-4.txt</option>
+	                                        <option value="5" <% nvram_match_x("", "vpnc_ov_passfile", "5","selected"); %>>password-5.txt</option>
+	                                    </select>
                                     </td>
                                 </tr>
                                 <tr id="row_vpnc_user">
@@ -737,6 +780,47 @@ function getHash(){
                             <table class="table">
                                 <tr>
                                     <td style="border: 0 none;"><center><input name="button2" type="button" class="btn btn-primary" style="width: 219px" onclick="applyRule();" value="<#CTL_apply#>"/></center></td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div id="wnd_vpnc_auth" style="display:none">
+                            <div class="alert alert-info" style="margin: 10px;"><#OVPN_Client_Password_File_Hint#></div>
+                            <table class="table">
+                                <tr>
+                                    <td style="padding-bottom: 0px; border-top: 0 none;">
+                                        <span class="caption-bold">password-1.txt:</span>
+                                        <textarea rows="3" wrap="off" spellcheck="false" maxlength="512" class="span12" name="ovpncli.password-1.txt" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpncli.password-1.txt",""); %></textarea>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-bottom: 0px; border-top: 0 none;">
+                                        <span class="caption-bold">password-2.txt:</span>
+                                        <textarea rows="3" wrap="off" spellcheck="false" maxlength="512" class="span12" name="ovpncli.password-2.txt" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpncli.password-2.txt",""); %></textarea>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-bottom: 0px; border-top: 0 none;">
+                                        <span class="caption-bold">password-3.txt:</span>
+                                        <textarea rows="3" wrap="off" spellcheck="false" maxlength="512" class="span12" name="ovpncli.password-3.txt" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpncli.password-3.txt",""); %></textarea>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-bottom: 0px; border-top: 0 none;">
+                                        <span class="caption-bold">password-4.txt:</span>
+                                        <textarea rows="3" wrap="off" spellcheck="false" maxlength="512" class="span12" name="ovpncli.password-4.txt" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpncli.password-4.txt",""); %></textarea>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-bottom: 0px; border-top: 0 none;">
+                                        <span class="caption-bold">password-5.txt:</span>
+                                        <textarea rows="3" wrap="off" spellcheck="false" maxlength="512" class="span12" name="ovpncli.password-5.txt" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpncli.password-5.txt",""); %></textarea>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table class="table">
+                                <tr>
+                                    <td style="border: 0 none;"><center><input name="button3" type="button" class="btn btn-primary" style="width: 219px" onclick="applyRule();" value="<#CTL_apply#>"/></center></td>
                                 </tr>
                             </table>
                         </div>

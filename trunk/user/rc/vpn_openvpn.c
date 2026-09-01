@@ -38,11 +38,14 @@
 #define SERVER_ROOT_DIR		"/etc/openvpn/server"
 #define SERVER_CERT_DIR		"/etc/storage/openvpn/server"
 #define SERVER_CUSTOM_CONF	"server.ovpn"
+#define SERVER_PASS_FILE	"/etc/openvpn/server/psw-file"
+#define SERVER_AUTH_SCRIPT	"/usr/bin/openvpn-checkpsw.sh"
 #define SERVER_LOG_NAME		"OpenVPN server"
 
 #define CLIENT_PID_FILE		"/var/run/openvpn_cli.pid"
 #define CLIENT_ROOT_DIR		"/etc/openvpn/client"
 #define CLIENT_CERT_DIR		"/etc/storage/openvpn/client"
+#define CLIENT_PASS_FILES	5
 #define CLIENT_LOG_NAME		"OpenVPN client"
 
 static const char *openvpn_server_keys[6] = {
@@ -112,6 +115,10 @@ static const char *custom_server_forbidden_list[] = {
 	"client-connect",
 	"client-disconnect",
 	"script-security",
+	"auth-user-pass-verify",
+	"verify-client-cert",
+	"client-cert-not-required",
+	"username-as-common-name",
 	"tmp-dir",
 	"management",
 	"plugin",
@@ -155,6 +162,194 @@ openvpn_create_client_secret(const char *secret_name)
 		
 		chmod(secret_file, 0600);
 	}
+}
+
+static int
+openvpn_copy_file(const char *source, const char *target, mode_t mode)
+{
+	FILE *fp_src, *fp_dst;
+	char buffer[1024];
+	size_t count;
+
+	fp_src = fopen(source, "r");
+	if (!fp_src)
+		return 1;
+
+	fp_dst = fopen(target, "w+");
+	if (!fp_dst) {
+		fclose(fp_src);
+		return 1;
+	}
+
+	while ((count = fread(buffer, 1, sizeof(buffer), fp_src)) > 0) {
+		if (fwrite(buffer, 1, count, fp_dst) != count) {
+			fclose(fp_dst);
+			fclose(fp_src);
+			unlink(target);
+			return 1;
+		}
+	}
+	if (ferror(fp_src)) {
+		fclose(fp_dst);
+		fclose(fp_src);
+		unlink(target);
+		return 1;
+	}
+
+	fclose(fp_dst);
+	fclose(fp_src);
+	chmod(target, mode);
+	return 0;
+}
+
+static int
+openvpn_server_password_file_valid(const char *path)
+{
+	FILE *fp;
+	char line[256], user[64], pass[128], *p;
+	int valid = 0;
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return 0;
+
+	while (fgets(line, sizeof(line), fp)) {
+		p = line;
+		while (*p == ' ' || *p == '\t')
+			p++;
+		if (*p == '\0' || *p == '\r' || *p == '\n' || *p == '#' || *p == ';')
+			continue;
+		if (sscanf(p, "%63s %127s", user, pass) == 2) {
+			valid = 1;
+			break;
+		}
+	}
+
+	fclose(fp);
+	return valid;
+}
+
+static int
+openvpn_prepare_server_passwords(void)
+{
+	FILE *fp;
+	int i, i_max, entries = 0;
+	char user_var[24], pass_var[24], storage_pass_file[128];
+	const char *user, *pass;
+	struct stat st;
+
+	if (nvram_get_int("vpns_ov_auth") == 0) {
+		unlink(SERVER_PASS_FILE);
+		return 0;
+	}
+
+	snprintf(storage_pass_file, sizeof(storage_pass_file), "%s/%s", SERVER_CERT_DIR, "psw-file");
+	if (stat(storage_pass_file, &st) == 0 && st.st_size > 0) {
+		if (!openvpn_server_password_file_valid(storage_pass_file) ||
+		    openvpn_copy_file(storage_pass_file, SERVER_PASS_FILE, 0640) != 0) {
+			logmessage(LOGNAME, "Unable to start %s: invalid psw-file!", SERVER_LOG_NAME);
+			return 1;
+		}
+		chown(SERVER_PASS_FILE, 0, 99);
+		return 0;
+	}
+
+	fp = fopen(SERVER_PASS_FILE, "w+");
+	if (!fp)
+		return 1;
+
+	i_max = nvram_get_int("vpns_num_x");
+	if (i_max > MAX_CLIENTS_NUM)
+		i_max = MAX_CLIENTS_NUM;
+
+	for (i = 0; i < i_max; i++) {
+		snprintf(user_var, sizeof(user_var), "vpns_user_x%d", i);
+		snprintf(pass_var, sizeof(pass_var), "vpns_pass_x%d", i);
+		user = nvram_safe_get(user_var);
+		pass = nvram_safe_get(pass_var);
+		if (!*user || !*pass || strpbrk(user, " \t\r\n") || strpbrk(pass, " \t\r\n"))
+			continue;
+		fprintf(fp, "%s %s\n", user, pass);
+		entries++;
+	}
+
+	fclose(fp);
+	chmod(SERVER_PASS_FILE, 0640);
+	chown(SERVER_PASS_FILE, 0, 99);
+
+	if (entries < 1) {
+		unlink(SERVER_PASS_FILE);
+		logmessage(LOGNAME, "Unable to start %s: no valid username/password account configured!", SERVER_LOG_NAME);
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+openvpn_client_password_file_valid(const char *path)
+{
+	FILE *fp;
+	char line[256];
+	int lines = 0;
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return 0;
+
+	while (lines < 2 && fgets(line, sizeof(line), fp)) {
+		line[strcspn(line, "\r\n")] = '\0';
+		if (!*line)
+			break;
+		lines++;
+	}
+
+	fclose(fp);
+	return (lines == 2) ? 1 : 0;
+}
+
+static int
+openvpn_prepare_client_passwords(int selected)
+{
+	int i;
+	char name[32], source[128], target[128];
+
+	for (i = 1; i <= CLIENT_PASS_FILES; i++) {
+		snprintf(name, sizeof(name), "password-%d.txt", i);
+		snprintf(source, sizeof(source), "%s/%s", CLIENT_CERT_DIR, name);
+		snprintf(target, sizeof(target), "%s/%s", CLIENT_ROOT_DIR, name);
+
+		if (!check_if_file_exist(source)) {
+			unlink(target);
+			continue;
+		}
+		if (openvpn_copy_file(source, target, 0600) != 0)
+			return 1;
+	}
+
+	if (selected > 0) {
+		snprintf(target, sizeof(target), "%s/password-%d.txt", CLIENT_ROOT_DIR, selected);
+		if (!openvpn_client_password_file_valid(target)) {
+			logmessage(LOGNAME, "Unable to start %s: password-%d.txt must contain username and password!", CLIENT_LOG_NAME, selected);
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static void
+openvpn_add_server_password_auth(FILE *fp)
+{
+	int auth_mode = nvram_get_int("vpns_ov_auth");
+
+	if (auth_mode < 1)
+		return;
+
+	fprintf(fp, "auth-user-pass-verify %s via-env\n", SERVER_AUTH_SCRIPT);
+	fprintf(fp, "username-as-common-name\n");
+	if (auth_mode == 2)
+		fprintf(fp, "verify-client-cert none\n");
 }
 
 static void
@@ -426,6 +621,9 @@ openvpn_create_custom_server_conf(const char *conf_file, int is_tun)
 	FILE *fp_src, *fp_dst;
 	char source_file[128], line[512];
 
+	if (openvpn_prepare_server_passwords() != 0)
+		return 1;
+
 	snprintf(source_file, sizeof(source_file), "%s/%s", SERVER_CERT_DIR, SERVER_CUSTOM_CONF);
 	fp_src = fopen(source_file, "r");
 	if (!fp_src) {
@@ -471,7 +669,8 @@ openvpn_create_custom_server_conf(const char *conf_file, int is_tun)
 	fprintf(fp_dst, "\n### Padavan runtime params:\n");
 	fprintf(fp_dst, "user %s\n", SYS_USER_NOBODY);
 	fprintf(fp_dst, "group %s\n", SYS_GROUP_NOGROUP);
-	fprintf(fp_dst, "script-security %d\n", 2);
+	fprintf(fp_dst, "script-security %d\n", (nvram_get_int("vpns_ov_auth") > 0) ? 3 : 2);
+	openvpn_add_server_password_auth(fp_dst);
 	fprintf(fp_dst, "tmp-dir %s\n", COMMON_TEMP_DIR);
 	fprintf(fp_dst, "writepid %s\n", SERVER_PID_FILE);
 	fprintf(fp_dst, "client-connect %s\n", SCRIPT_OVPN_SERVER);
@@ -496,6 +695,9 @@ openvpn_create_server_conf(const char *conf_file, int is_tun)
 
 	if (nvram_get_int("vpns_ov_custom") == 1)
 		return openvpn_create_custom_server_conf(conf_file, is_tun);
+
+	if (openvpn_prepare_server_passwords() != 0)
+		return 1;
 
 	i_atls = nvram_get_int("vpns_ov_atls");
 	i_tcv2 = nvram_get_int("vpns_ov_tcv2");
@@ -650,7 +852,8 @@ openvpn_create_server_conf(const char *conf_file, int is_tun)
 	fprintf(fp, "persist-tun\n");
 	fprintf(fp, "user %s\n", SYS_USER_NOBODY);
 	fprintf(fp, "group %s\n", SYS_GROUP_NOGROUP);
-	fprintf(fp, "script-security %d\n", 2);
+	fprintf(fp, "script-security %d\n", (nvram_get_int("vpns_ov_auth") > 0) ? 3 : 2);
+	openvpn_add_server_password_auth(fp);
 	fprintf(fp, "tmp-dir %s\n", COMMON_TEMP_DIR);
 	fprintf(fp, "writepid %s\n", SERVER_PID_FILE);
 
@@ -672,11 +875,12 @@ static int
 openvpn_create_client_conf(const char *conf_file, int is_tun)
 {
 	FILE *fp;
-	int i, i_prot, i_prot_ori, i_auth, i_atls;
+	int i, i_prot, i_prot_ori, i_auth, i_atls, i_passfile;
 	const char *p_peer, *p_prot;
 
 	i_auth = nvram_get_int("vpnc_ov_auth");
 	i_atls = nvram_get_int("vpnc_ov_atls");
+	i_passfile = nvram_safe_get_int("vpnc_ov_passfile", 0, 0, CLIENT_PASS_FILES);
 
 	for (i=0; i<4; i++) {
 		if (i_auth == 1 && (i == 1 || i == 2))
@@ -686,6 +890,9 @@ openvpn_create_client_conf(const char *conf_file, int is_tun)
 		if (!openvpn_check_key(openvpn_client_keys[i], 0))
 			return 1;
 	}
+
+	if (openvpn_prepare_client_passwords((i_auth != 0) ? i_passfile : 0) != 0)
+		return 1;
 
 	i_prot = nvram_get_int("vpnc_ov_prot");
 	i_prot_ori = i_prot;
@@ -753,8 +960,12 @@ openvpn_create_client_conf(const char *conf_file, int is_tun)
 	openvpn_add_compress(fp, nvram_get_int("vpnc_ov_compress"), 0);
 
 	if (i_auth != 0) {
-		fprintf(fp, "auth-user-pass %s\n", "secret");
-		openvpn_create_client_secret("secret");
+		if (i_passfile > 0)
+			fprintf(fp, "auth-user-pass password-%d.txt\n", i_passfile);
+		else {
+			fprintf(fp, "auth-user-pass %s\n", "secret");
+			openvpn_create_client_secret("secret");
+		}
 	}
 
 	if (nvram_match("vpnc_dgw", "1"))
@@ -1163,7 +1374,7 @@ int
 ovpn_server_expcli_main(int argc, char **argv)
 {
 	FILE *fp;
-	int i, i_prot, i_atls, i_tcv2, days_valid;
+	int i, i_prot, i_atls, i_tcv2, i_auth, days_valid;
 	const char *p_prot, *wan_addr, *rsa_bits;
 	const char *tmp_ovpn_path = "/tmp/export_ovpn";
 	const char *tmp_ovpn_conf = "/tmp/client.ovpn";
@@ -1186,6 +1397,7 @@ ovpn_server_expcli_main(int argc, char **argv)
 
 	i_atls = nvram_get_int("vpns_ov_atls");
 	i_tcv2 = nvram_get_int("vpns_ov_tcv2");
+	i_auth = nvram_get_int("vpns_ov_auth");
 
 	for (i=0; i<6; i++) {
 		if (!i_atls && (i == 4))
@@ -1198,11 +1410,13 @@ ovpn_server_expcli_main(int argc, char **argv)
 		}
 	}
 
-	/* Generate client cert and key */
+	/* Password-only clients do not need a client certificate. */
 	doSystem("rm -rf %s", tmp_ovpn_path);
-	setenv("CRT_PATH_CLI", tmp_ovpn_path, 1);
-	doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %s -d %d", "client", argv[1], rsa_bits, days_valid);
-	unsetenv("CRT_PATH_CLI");
+	if (i_auth != 2) {
+		setenv("CRT_PATH_CLI", tmp_ovpn_path, 1);
+		doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %s -d %d", "client", argv[1], rsa_bits, days_valid);
+		unsetenv("CRT_PATH_CLI");
+	}
 
 	i_prot = nvram_get_int("vpns_ov_prot");
 	if (i_prot > 1 && get_ipv6_type() == IPV6_DISABLED)
@@ -1258,6 +1472,8 @@ ovpn_server_expcli_main(int argc, char **argv)
 	fprintf(fp, "nobind\n");
 	fprintf(fp, "persist-key\n");
 	fprintf(fp, "persist-tun\n");
+	if (i_auth > 0)
+		fprintf(fp, "auth-user-pass\n");
 	openvpn_add_auth(fp, nvram_get_int("vpns_ov_mdig"));
 	openvpn_add_cipher(fp, nvram_get_int("vpns_ov_ciph"), nvram_get("vpns_ov_ncp_clist"));
 	openvpn_add_compress(fp, nvram_get_int("vpns_ov_compress"), 0);
@@ -1266,8 +1482,10 @@ ovpn_server_expcli_main(int argc, char **argv)
 	fprintf(fp, "mute %d\n", 10);
 	fprintf(fp, ";remote-cert-tls %s\n", "server");
 	openvpn_add_key(fp, SERVER_CERT_DIR, openvpn_server_keys[0], "ca");
-	openvpn_add_key(fp, tmp_ovpn_path, openvpn_client_keys[1], "cert");
-	openvpn_add_key(fp, tmp_ovpn_path, openvpn_client_keys[2], "key");
+	if (i_auth != 2) {
+		openvpn_add_key(fp, tmp_ovpn_path, openvpn_client_keys[1], "cert");
+		openvpn_add_key(fp, tmp_ovpn_path, openvpn_client_keys[2], "key");
+	}
 
 	if (i_atls == 1) {
 		openvpn_add_key(fp, SERVER_CERT_DIR, openvpn_server_keys[4], "tls-auth");

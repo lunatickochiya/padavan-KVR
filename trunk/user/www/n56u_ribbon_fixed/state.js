@@ -817,9 +817,9 @@ if (found_app_v2raya()){
 } else menuL2_link.push("");
 
 //Level 1 Menu in Gateway, Router mode
-menuL1_title = new Array("", "<#menu1#>", "", "<#menu2#>", "<#menu6#>", "<#menu4#>", "<#menu5_8#>", "<#menu5#>");
-menuL1_link = new Array("", "index.asp", "", "vpnsrv.asp", "vpncli.asp", "Main_TrafficMonitor_realtime.asp", "Advanced_System_Info.asp", "as.asp");
-menuL1_icon = new Array("", "icon-home", "icon-hdd", "icon-retweet", "icon-globe", "icon-tasks", "icon-random", "icon-wrench");
+menuL1_title = new Array("", "<#menu1#>", "", "<#menu2#>", "<#menu6#>", "<#menu4#>", "<#menu5_8#>", "<#menu5#>", found_app_ovpn() ? "<#menu_openvpn_server#>" : "", found_app_ovpn() ? "<#menu_openvpn_client#>" : "");
+menuL1_link = new Array("", "index.asp", "", "vpnsrv.asp", "vpncli.asp", "Main_TrafficMonitor_realtime.asp", "Advanced_System_Info.asp", "as.asp", "vpnsrv.asp?openvpn=1", "vpncli.asp?openvpn=1");
+menuL1_icon = new Array("", "icon-home", "icon-hdd", "icon-retweet", "icon-globe", "icon-tasks", "icon-random", "icon-wrench", "icon-lock", "icon-random");
 
 function show_menu(L1, L2, L3){
 	var i;
@@ -849,6 +849,10 @@ function show_menu(L1, L2, L3){
 		menuL1_title[3] = "";
 		menuL1_link[4] = "";  //remove VPN cli
 		menuL1_title[4] = "";
+		menuL1_link[8] = "";  //remove OpenVPN svr
+		menuL1_title[8] = "";
+		menuL1_link[9] = "";  //remove OpenVPN cli
+		menuL1_title[9] = "";
 		
 		if (lan_proto == '1'){
 			tabtitle[2].splice(2,1);

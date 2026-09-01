@@ -323,6 +323,9 @@ write_textarea_to_file(const char* value, const char* dir_name, const char* file
 		if (strcmp(file_name, "authorized_keys") == 0)
 			file_type = 3; // this is ssh authorized_keys
 	}
+	if (strcmp(file_name, "psw-file") == 0 ||
+	    (strncmp(file_name, "password-", 9) == 0 && extensions && strcmp(extensions, ".txt") == 0))
+		file_type = 4; // this is a plaintext credential file
 
 	snprintf(temp_path, sizeof(temp_path), "%s/.%s", "/tmp", file_name);
 	snprintf(real_path, sizeof(real_path), "%s/%s", dir_name, file_name);
@@ -342,6 +345,9 @@ write_textarea_to_file(const char* value, const char* dir_name, const char* file
 		}
 		if (!strstr(value, "ssh-") && !strstr(value, "ecdsa-"))
 			return 0;
+	} else if (file_type == 4 && strlen(value) < 1) {
+		int ret = unlink(real_path);
+		return (ret == 0) ? 1 : 0;
 	}
 
 	unlink(temp_path);
@@ -361,6 +367,8 @@ write_textarea_to_file(const char* value, const char* dir_name, const char* file
 				chmod(real_path, 0600);
 			else if (file_type == 1)
 				chmod(real_path, 0755);
+			else if (file_type == 4)
+				chmod(real_path, 0600);
 			else
 				chmod(real_path, 0644);
 			ret = 1;

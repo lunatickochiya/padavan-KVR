@@ -43,6 +43,7 @@ vpn_ipvuse_x = '<% nvram_get_x("", "vpns_vuse"); %>';
 fw_enable_x = '<% nvram_get_x("", "fw_enable_x"); %>';
 dhcp_enable_x = '<% nvram_get_x("", "dhcp_enable_x"); %>';
 ip6_service = '<% nvram_get_x("", "ip6_service"); %>';
+var openvpn_page = /(?:^|[?&])openvpn=1(?:&|$)/.test(location.search);
 
 var ACLList = [<% get_nvram_list("LANHostConfig", "VPNSACLList", "vpns_pass_x"); %>];
 
@@ -54,13 +55,19 @@ var vpn_clients = [];
 
 function initial(){
 	show_banner(0);
-	show_menu(3, -1, 0);
+	show_menu(openvpn_page ? 8 : 3, -1, 0);
 	show_footer();
+	if (openvpn_page)
+		$('vpns_page_title').innerHTML = '<#menu_openvpn_server#>';
 
-	if (!found_app_ovpn())
+	if (openvpn_page) {
+		document.form.vpns_type.value = "2";
+		showhide_div('row_vpns_type', 0);
+	} else {
 		document.form.vpns_type.remove(2);
-	else
-	if (!support_ipv6() || ip6_service == ''){
+	}
+
+	if (found_app_ovpn() && (!support_ipv6() || ip6_service == '')){
 		var o = document.form.vpns_ov_prot;
 		for (var i = 0; i < 4; i++) {
 			o.remove(2);
@@ -89,7 +96,7 @@ function applyRule(){
 		showLoading();
 		
 		document.form.action_mode.value = " Restart ";
-		document.form.current_page.value = "/vpnsrv.asp";
+		document.form.current_page.value = openvpn_page ? "/vpnsrv.asp?openvpn=1" : "/vpnsrv.asp";
 		document.form.next_page.value = "";
 		
 		document.form.submit();
@@ -253,6 +260,7 @@ function textarea_ovpn_enabled(v){
 	inputCtrl(document.form['ovpnsvr.server.key'], v);
 	inputCtrl(document.form['ovpnsvr.ta.key'], v);
 	inputCtrl(document.form['ovpnsvr.stc2.key'], v);
+	inputCtrl(document.form['ovpnsvr.psw-file'], v);
 }
 
 function openvpn_profile_error(code) {
@@ -326,16 +334,14 @@ function change_vpns_ov_custom() {
 
 	showhide_div('row_vpns_ov_custom', is_ov);
 	showhide_div('row_vpns_ov_mode', is_ov);
+	showhide_div('row_vpns_ov_auth', is_ov);
 	showhide_div('row_vpns_ov_profile', custom);
 	for (i = 0; i < generated_rows.length; i++)
 		showhide_div(generated_rows[i], generated);
 
 	showhide_div('certs_hint', generated && !openvpn_srv_cert_found());
 	showhide_div('tbl_vpn_pool', !custom && document.form.vpns_enable[0].checked);
-	if (custom)
-		showhide_div('tab_vpns_acl', 0);
-	else
-		change_vpns_vnet_enable();
+	change_vpns_vnet_enable();
 }
 
 function change_vpns_enabled(){
@@ -375,6 +381,7 @@ function change_vpns_type(){
 
 	showhide_div('row_vpns_ov_mode', is_ov);
 	showhide_div('row_vpns_ov_custom', is_ov);
+	showhide_div('row_vpns_ov_auth', is_ov);
 	showhide_div('row_vpns_ov_prot', is_ov);
 	showhide_div('row_vpns_ov_port', is_ov);
 	showhide_div('row_vpns_ov_mdig', is_ov);
@@ -392,11 +399,8 @@ function change_vpns_type(){
 
 	if (is_ov){
 		showhide_div('row_vpns_cast', 0);
-		
-		$("col_pass").innerHTML = "";
-		$("div_acl_info").innerHTML = "<#VPNS_Accnt_Info2#></br><#VPNS_Accnt_Info3#>";
-		inputCtrl(document.form.vpns_pass_x_0, 0);
-		document.form.vpns_pass_x_0.value = "";
+
+		change_vpns_ov_auth();
 		
 		if (openssl_util_found() && login_safe() && openvpn_srv_cert_found()) {
 			if (!support_openssl_ec()) {
@@ -421,6 +425,18 @@ function change_vpns_type(){
 
 	change_vpns_vnet_enable();
 	change_vpns_ov_custom();
+}
+
+function change_vpns_ov_auth(){
+	var enabled = (document.form.vpns_type.value == "2" && document.form.vpns_ov_auth.value != "0") ? 1 : 0;
+
+	$("col_pass").innerHTML = enabled ? "<#ISP_Authentication_pass#>" : "";
+	$("div_acl_info").innerHTML = enabled ? "<#OVPN_Server_Auth_Hint#>" : "<#VPNS_Accnt_Info2#></br><#VPNS_Accnt_Info3#>";
+	showhide_div('ovpn_server_psw_file', enabled);
+	inputCtrl(document.form.vpns_pass_x_0, enabled);
+	if (!enabled)
+		document.form.vpns_pass_x_0.value = "";
+	change_vpns_vnet_enable();
 }
 
 function calc_vpn_addr(vnet_show,is_openvpn){
@@ -473,11 +489,13 @@ function change_vpns_vnet_enable(){
 	var vnet_show;
 	var rnet_show;
 	var is_openvpn = (document.form.vpns_type.value == "2") ? 1 : 0;
+	var auth_enabled = (is_openvpn && document.form.vpns_ov_auth.value != "0") ? 1 : 0;
+	var custom = (is_openvpn && document.form.vpns_ov_custom.value == "1") ? 1 : 0;
 
 	if (is_openvpn){
 		vnet_show = (document.form.vpns_ov_mode.value == "1") ? 1 : 0;
 		rnet_show = vnet_show;
-		showhide_div('tab_vpns_acl', vnet_show);
+		showhide_div('tab_vpns_acl', (!custom && vnet_show) || auth_enabled);
 		showhide_div('row_vpns_vuse', vnet_show);
 		showhide_div('row_vpns_actl', (vnet_show && fw_enable_x == "1"));
 	}else{
@@ -533,10 +551,16 @@ function markGroupACL(o, c, b) {
 			return false;
 		}
 		
-		if (document.form.vpns_type.value == "2" && document.form.vpns_addr_x_0.value == "") {
+		if (document.form.vpns_type.value == "2" && document.form.vpns_ov_custom.value == "0" && document.form.vpns_ov_mode.value == "1" && document.form.vpns_addr_x_0.value == "") {
 			alert("<#JS_fieldblank#>");
 			document.form.vpns_addr_x_0.focus();
 			document.form.vpns_addr_x_0.select();
+			return false;
+		}
+
+		if (document.form.vpns_type.value == "2" && document.form.vpns_ov_auth.value != "0" && document.form.vpns_pass_x_0.value == "") {
+			alert("<#OVPN_Password_Required#>");
+			document.form.vpns_pass_x_0.focus();
 			return false;
 		}
 		
@@ -570,7 +594,7 @@ function markGroupACL(o, c, b) {
 		}
 	}
 	pageChanged = 0;
-	document.form.current_page.value = "/vpnsrv.asp#acl";
+	document.form.current_page.value = openvpn_page ? "/vpnsrv.asp?openvpn=1#acl" : "/vpnsrv.asp#acl";
 	document.form.action_mode.value = b;
 	return true;
 }
@@ -590,7 +614,7 @@ function reset_btn_gen(is_refresh){
 	$btn.removeClass('alert-error').removeClass('alert-success');
 	$btn.val('<#VPNS_GenNew#>');
 	if (is_refresh)
-		location.href = "vpnsrv.asp";
+		location.href = openvpn_page ? "vpnsrv.asp?openvpn=1" : "vpnsrv.asp";
 }
 
 function reset_btn_exp(){
@@ -698,8 +722,10 @@ function showACLList(vnet_show,rnet_show,is_openvpn){
 			}
 			
 			if (is_openvpn){
+				if (document.form.vpns_ov_auth.value != "0")
+					acl_pass = '*****';
 				if (openssl_util_found() && openvpn_srv_cert_found() && login_safe())
-					acl_pass = '<a href="javascript:export_client_ovpn(\'' + ACLList[i][0] + '\');"><#VPNS_Export#></a>';
+					acl_pass += (acl_pass ? '&nbsp; ' : '') + '<a href="javascript:export_client_ovpn(\'' + ACLList[i][0] + '\');"><#VPNS_Export#></a>';
 			}else
 				acl_pass = '*****';
 			
@@ -854,7 +880,7 @@ function getHash(){
              <div class="span9">
                 <div class="box well grad_colour_dark_blue">
                     <div id="tabMenu"></div>
-                    <h2 class="box_head round_top"><#menu2#></h2>
+                    <h2 id="vpns_page_title" class="box_head round_top"><#menu2#></h2>
 
                     <div class="round_bottom">
 
@@ -897,7 +923,7 @@ function getHash(){
                                 <tr>
                                     <th colspan="2" style="background-color: rgba ( 171 , 168 , 167 , 0.2 );"><#VPNS_Base#></th>
                                 </tr>
-                                <tr>
+                                <tr id="row_vpns_type">
                                     <th width="50%"><#VPNS_Type#></th>
                                     <td>
                                         <select name="vpns_type" class="input" onchange="change_vpns_type();">
@@ -948,6 +974,16 @@ function getHash(){
 	                                        <select name="vpns_ov_custom" class="input" onchange="change_vpns_ov_custom();">
 	                                            <option value="0" <% nvram_match_x("", "vpns_ov_custom", "0","selected"); %>><#OVPN_Server_Config_Generated#></option>
 	                                            <option value="1" <% nvram_match_x("", "vpns_ov_custom", "1","selected"); %>><#OVPN_Server_Config_Custom#></option>
+	                                        </select>
+	                                    </td>
+	                                </tr>
+	                                <tr id="row_vpns_ov_auth" style="display:none">
+	                                    <th><#OVPN_Server_Auth_Mode#></th>
+	                                    <td>
+	                                        <select name="vpns_ov_auth" class="input" onchange="change_vpns_ov_auth();">
+	                                            <option value="0" <% nvram_match_x("", "vpns_ov_auth", "0","selected"); %>><#OVPN_Auth_Certificate#></option>
+	                                            <option value="1" <% nvram_match_x("", "vpns_ov_auth", "1","selected"); %>><#OVPN_Auth_CertificatePassword#></option>
+	                                            <option value="2" <% nvram_match_x("", "vpns_ov_auth", "2","selected"); %>><#OVPN_Auth_Password#></option>
 	                                        </select>
 	                                    </td>
 	                                </tr>
@@ -1276,6 +1312,11 @@ function getHash(){
 
                         <div id="wnd_vpns_acl" style="display:none">
                             <div id="div_acl_info" class="alert alert-info" style="margin: 10px;"></div>
+                            <div id="ovpn_server_psw_file" style="display:none; margin: 10px;">
+                                <span class="caption-bold"><#OVPN_Server_Password_File#></span>
+                                <textarea rows="8" wrap="off" spellcheck="false" maxlength="8192" class="span12" name="ovpnsvr.psw-file" style="font-family:'Courier New'; font-size:12px;"><% nvram_dump("ovpnsvr.psw-file",""); %></textarea>
+                                <span style="color:#888;"><#OVPN_Server_Password_File_Hint#></span>
+                            </div>
                             <table class="table">
                                 <tr>
                                     <th width="20%" style="border-top: 0 none;"><#VPNS_CName#>:</th>
@@ -1289,7 +1330,7 @@ function getHash(){
                                         <input type="text" size="14" class="span12" autocomplete="off" maxlength="32" name="vpns_user_x_0" value="<% nvram_get_x("", "vpns_user_x_0"); %>" onkeypress="return is_string(this,event);" />
                                     </td>
                                     <td>
-                                        <input type="text" size="14" class="span12" autocomplete="off" maxlength="32" name="vpns_pass_x_0" onkeypress="return is_string(this,event);" />
+                                        <input type="password" size="14" class="span12" autocomplete="new-password" maxlength="32" name="vpns_pass_x_0" onkeypress="return is_string(this,event);" />
                                     </td>
                                     <td>
                                         <span id="vpnip3"></span>
