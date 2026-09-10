@@ -66,7 +66,7 @@ function initial(){
 
 	document.form.http_passwd2.value = "";
 
-	if (login_safe()){
+	if (login_maintenance()){
 		showhide_div('row_user', 1);
 		showhide_div('row_pass1', 1);
 		showhide_div('row_pass2', 1);

@@ -239,8 +239,8 @@
 #if defined (APP_NAPT66)
 			{"napt66_enable", "", NULL, FALSE},
 #endif
-			{"http_username", "", NULL, EVM_RESTART_CROND|EVM_BLOCK_UNSAFE},
-			{"http_passwd", "", NULL, EVM_BLOCK_UNSAFE},
+			{"http_username", "", NULL, EVM_RESTART_CROND},
+			{"http_passwd", "", NULL, FALSE},
 			{"modem_rule", "", NULL, EVM_RESTART_MODEM},
 			{"modem_type", "", NULL, EVM_RESTART_MODEM},
 			{"modem_country", "", NULL, EVM_RESTART_MODEM},
