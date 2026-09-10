@@ -43,7 +43,7 @@ function initial(){
 		showhide_div('row_st_backup', 1);
 	}
 
-	if (login_safe()){
+	if (login_maintenance()){
 		showhide_div('row_nv_reset', 1);
 		showhide_div('row_nv_restore1', 1);
 		showhide_div('row_nv_restore2', 1);

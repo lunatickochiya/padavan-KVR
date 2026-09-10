@@ -26,7 +26,7 @@ function initial(){
 	show_menu(5,7,4);
 	show_footer();
 
-	if (!login_safe()){
+	if (!login_maintenance()){
 		inputCtrl(document.form.file, 0);
 		inputCtrl(document.form.button, 0);
 	}

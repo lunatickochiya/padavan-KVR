@@ -456,6 +456,13 @@ get_login_backup(void)
 #endif
 }
 
+int
+get_login_maintenance(void)
+{
+	/* Firmware and restore handlers still require HTTP authentication. */
+	return login_ip.len != 0;
+}
+
 static void
 http_login(const uaddr *ip_now)
 {

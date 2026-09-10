@@ -3405,6 +3405,7 @@ static int login_state_hook(int eid, webs_t wp, int argc, char **argv) {
 
 	websWrite(wp, "function login_safe() { return %d; }\n", get_login_safe());
 	websWrite(wp, "function login_backup() { return %d; }\n", get_login_backup());
+	websWrite(wp, "function login_maintenance() { return %d; }\n", get_login_maintenance());
 	websWrite(wp, "function login_ip_str() { return '%s'; }\n", s_addr);
 	websWrite(wp, "function login_mac_str() { return '%s'; }\n", get_login_mac());
 
@@ -4917,7 +4918,7 @@ do_apply_cgi(const char *url, FILE *stream)
 static void
 do_upgrade_fw_cgi(const char *url, FILE *stream)
 {
-	if (f_exists(FW_IMG_NAME) && get_login_safe()) {
+	if (f_exists(FW_IMG_NAME) && get_login_maintenance()) {
 		notify_rc("flash_firmware");
 		websApply(stream, "Updating.asp");
 	} else {
@@ -4932,7 +4933,7 @@ do_restore_nv_cgi(const char *url, FILE *stream)
 	char *upload_file = PROFILE_FIFO_UPLOAD;
 	int ret = -1;
 
-	if (f_exists(upload_file) && get_login_safe()) {
+	if (f_exists(upload_file) && get_login_maintenance()) {
 		doSystem("killall %s %s", "-q", "watchdog");
 		sleep(1);
 		ret = eval("/usr/sbin/nvram", "restore", upload_file);
@@ -4960,7 +4961,7 @@ do_restore_st_cgi(const char *url, FILE *stream)
 	const char *upload_file = STORAGE_FIFO_FILENAME;
 	int ret = -1;
 
-	if (f_exists(upload_file) && get_login_safe()) {
+	if (f_exists(upload_file) && get_login_maintenance()) {
 		ret = eval("/sbin/mtd_storage.sh", "restore");
 	}
 
