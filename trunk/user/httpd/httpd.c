@@ -434,15 +434,8 @@ get_login_mac(void)
 int
 get_login_safe(void)
 {
-	if (login_ip.len == 0)
-		return 0;
-
-#if defined (SUPPORT_HTTPS)
-	if (http_is_ssl)
-		return 1;
-#endif
-
-	return login_safe;
+	/* Authenticated remote sessions have the same privileges as LAN sessions. */
+	return login_ip.len != 0;
 }
 
 int
