@@ -72,6 +72,7 @@ static int wl_modified = 0;
 #endif
 static int rt_modified = 0;
 static u64 restart_needed_bits = 0;
+static u32 restart_needed_services = 0;
 
 //static char post_buf[32768] = {0};
 static char post_buf[65535] = {0};
@@ -877,10 +878,43 @@ validate_nvram_lan_subnet(void)
 	validate_nvram_lan_param("dmz_ip", lan_addr, lan_mask);
 }
 
+static u64
+split_restart_mask(int sid, u64 event_mask, u32 *service_mask)
+{
+	const char *service_id = GetServiceId(sid);
+
+	*service_mask = 0;
+
+#if defined(APP_SHADOWSOCKS)
+	if (service_id && !strcmp(service_id, "ShadowsocksConf")) {
+		if (event_mask & EVM_RESTART_SHADOWSOCKS)
+			*service_mask |= SVM_RESTART_SHADOWSOCKS;
+		if (event_mask & EVM_RESTART_SS_TUNNEL)
+			*service_mask |= SVM_RESTART_SS_TUNNEL;
+
+		/* Bits 48 and 49 belong to Caddy and AdGuardHome globally. */
+		event_mask &= ~(EVM_RESTART_SHADOWSOCKS | EVM_RESTART_SS_TUNNEL);
+	}
+#endif
+
+#if defined(APP_VIRTUALHERE)
+	if (service_id && !strcmp(service_id, "VIRTUALHERE")) {
+		if (event_mask & EVM_RESTART_VIRTUALHERE)
+			*service_mask |= SVM_RESTART_VIRTUALHERE;
+
+		/* Bit 53 belongs to AliyunDrive globally. */
+		event_mask &= ~EVM_RESTART_VIRTUALHERE;
+	}
+#endif
+
+	return event_mask & ~(EVM_BLOCK_UNSAFE);
+}
+
 static int
 validate_asp_apply(webs_t wp, int sid)
 {
 	u64 event_mask;
+	u32 service_mask;
 	int user_changed = 0;
 	int pass_changed = 0;
 	int lanip_changed = 0;
@@ -900,7 +934,7 @@ validate_asp_apply(webs_t wp, int sid)
 		if (!get_login_safe() && (v->event_mask & EVM_BLOCK_UNSAFE))
 			continue;
 		
-		event_mask = v->event_mask & ~(EVM_BLOCK_UNSAFE);
+		event_mask = split_restart_mask(sid, v->event_mask, &service_mask);
 		
 		if (!strcmp(v->longname, "Group"))
 			continue;
@@ -909,35 +943,49 @@ validate_asp_apply(webs_t wp, int sid)
 			const char *file_name = v->name+8;
 			
 			if (!strncmp(v->name, "cupscfg.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_CUPS_DIR, file_name))
+				if (write_textarea_to_file(value, STORAGE_CUPS_DIR, file_name)) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 			} else if (!strncmp(v->name, "dnsmasq.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_DNSMASQ_DIR, file_name))
+				if (write_textarea_to_file(value, STORAGE_DNSMASQ_DIR, file_name)) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 			} else if (!strncmp(v->name, "scripts.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_SCRIPTS_DIR, file_name))
+				if (write_textarea_to_file(value, STORAGE_SCRIPTS_DIR, file_name)) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 					if (!strcmp(file_name, "ap_script.sh"))
 					{
 					doSystem("/etc/storage/ap_script.sh");
 					}
 			} else if (!strncmp(v->name, "crontab.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_CRONTAB_DIR, nvram_safe_get("http_username")))
+				if (write_textarea_to_file(value, STORAGE_CRONTAB_DIR, nvram_safe_get("http_username"))) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 			}
 #if defined (SUPPORT_HTTPS)
 			else if (!strncmp(v->name, "httpssl.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_HTTPSSL_DIR, file_name))
+				if (write_textarea_to_file(value, STORAGE_HTTPSSL_DIR, file_name)) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 			}
 #endif
 #if defined(APP_OPENVPN)
 			else if (!strncmp(v->name, "ovpnsvr.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_OVPNSVR_DIR, file_name))
+				if (write_textarea_to_file(value, STORAGE_OVPNSVR_DIR, file_name)) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 			} else if (!strncmp(v->name, "ovpncli.", 8)) {
-				if (write_textarea_to_file(value, STORAGE_OVPNCLI_DIR, file_name))
+				if (write_textarea_to_file(value, STORAGE_OVPNCLI_DIR, file_name)) {
 					restart_needed_bits |= event_mask;
+					restart_needed_services |= service_mask;
+				}
 			}
 #endif
 			continue;
@@ -1135,6 +1183,8 @@ validate_asp_apply(webs_t wp, int sid)
 			restart_needed_bits |= event_mask;
 			dbG("debug restart_needed_bits: 0x%llx\n", restart_needed_bits);
 		}
+		if (service_mask)
+			restart_needed_services |= service_mask;
 	}
 
 	if (user_changed || pass_changed)
@@ -1148,7 +1198,7 @@ validate_asp_apply(webs_t wp, int sid)
 	if (lanip_changed)
 		validate_nvram_lan_subnet();
 
-	return (nvram_modified || restart_needed_bits) ? 1 : 0;
+	return (nvram_modified || restart_needed_bits || restart_needed_services) ? 1 : 0;
 }
 
 #if 0
@@ -1193,6 +1243,7 @@ update_variables_ex(int eid, webs_t wp, int argc, char **argv)
 	int result;
 
 	restart_needed_bits = 0;
+	restart_needed_services = 0;
 
 	// assign control variables
 	action_mode = websGetVar(wp, "action_mode", "");
@@ -1239,6 +1290,8 @@ update_variables_ex(int eid, webs_t wp, int argc, char **argv)
 				}
 				else if (!strcmp(action_mode, " Restart ")) {
 					struct variable *v;
+					u64 event_mask;
+					u32 service_mask;
 					
 					for (v = GetVariables(sid); v->name != NULL; ++v) {
 						if (!strcmp(v->name, group_id))
@@ -1248,7 +1301,9 @@ update_variables_ex(int eid, webs_t wp, int argc, char **argv)
 					validate_asp_apply(wp, sid);	// for some nvram with this group
 					
 					if (v->name && nvram_get_int(group_id) > 0) {
-						restart_needed_bits |= (v->event_mask & ~(EVM_BLOCK_UNSAFE));
+						event_mask = split_restart_mask(sid, v->event_mask, &service_mask);
+						restart_needed_bits |= event_mask;
+						restart_needed_services |= service_mask;
 						dbG("group restart_needed_bits: 0x%llx\n", restart_needed_bits);
 #if BOARD_HAS_5G_RADIO
 						if (!strcmp(group_id, "RBRList") || !strcmp(group_id, "ACLList"))
@@ -1296,7 +1351,8 @@ update_variables_ex(int eid, webs_t wp, int argc, char **argv)
 		return 0;
 	}
 
-	if (restart_needed_bits != 0 && (!strcmp(action_mode, " Apply ") || !strcmp(action_mode, " Restart "))) {
+	if ((restart_needed_bits != 0 || restart_needed_services != 0) &&
+	    (!strcmp(action_mode, " Apply ") || !strcmp(action_mode, " Restart "))) {
 		int i;
 		u32 restart_total_time = 0;
 		u32 max_time;
@@ -1334,6 +1390,13 @@ update_variables_ex(int eid, webs_t wp, int argc, char **argv)
 #endif
 		if ((restart_needed_bits & EVM_RESTART_REBOOT) != 0)
 			restart_total_time = MAX(EVT_RESTART_REBOOT, restart_total_time);
+
+		if (restart_needed_services & SVM_RESTART_SHADOWSOCKS)
+			restart_total_time = MAX(EVT_RESTART_SHADOWSOCKS, restart_total_time);
+		if (restart_needed_services & SVM_RESTART_SS_TUNNEL)
+			restart_total_time = MAX(EVT_RESTART_SS_TUNNEL, restart_total_time);
+		if (restart_needed_services & SVM_RESTART_VIRTUALHERE)
+			restart_total_time = MAX(EVT_RESTART_VIRTUALHERE, restart_total_time);
 		
 		websWrite(wp, "<script>restart_needed_time(%u);</script>\n", restart_total_time);
 	}
@@ -1357,11 +1420,12 @@ ej_notify_services(int eid, webs_t wp, int argc, char **argv)
 {
 	int i;
 
-	if (!restart_needed_bits)
+	if (!restart_needed_bits && !restart_needed_services)
 		return 0;
 
 	if ((restart_needed_bits & EVM_RESTART_REBOOT) != 0) {
 		restart_needed_bits = 0;
+		restart_needed_services = 0;
 		if (nvram_get_int("nvram_manual") == 1)
 			nvram_commit();
 		sys_reboot();
@@ -1379,6 +1443,24 @@ ej_notify_services(int eid, webs_t wp, int argc, char **argv)
 		}
 		i++;
 	}
+
+#if defined(APP_SHADOWSOCKS)
+	if (restart_needed_services & SVM_RESTART_SHADOWSOCKS) {
+		restart_needed_services &= ~SVM_RESTART_SHADOWSOCKS;
+		notify_rc(RCN_RESTART_SHADOWSOCKS);
+	}
+	if (restart_needed_services & SVM_RESTART_SS_TUNNEL) {
+		restart_needed_services &= ~SVM_RESTART_SS_TUNNEL;
+		notify_rc(RCN_RESTART_SS_TUNNEL);
+	}
+#endif
+
+#if defined(APP_VIRTUALHERE)
+	if (restart_needed_services & SVM_RESTART_VIRTUALHERE) {
+		restart_needed_services &= ~SVM_RESTART_VIRTUALHERE;
+		notify_rc(RCN_RESTART_VIRTUALHERE);
+	}
+#endif
 
 	if ((restart_needed_bits & EVM_RESTART_WIFI2) != 0) {
 		restart_needed_bits &= ~EVM_RESTART_WIFI2;
