@@ -30,6 +30,11 @@ jobs:
       with:
         version: v4.2.4
         install-only: true
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.5'
+        cache: false
     - name: Clone source code
       env:
         KERNEL: 3.4
@@ -142,6 +147,7 @@ jobs:
         sed -i '/CONFIG_FIRMWARE_INCLUDE_ZEROTIER/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_ALIDDNS/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS/d' .config
+        sed -i '/CONFIG_FIRMWARE_INCLUDE_SINGBOX/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_V2RAY/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_XRAY/d' .config
         sed -i '/CONFIG_FIRMWARE_INCLUDE_TROJAN/d' .config
@@ -426,8 +432,9 @@ jobs:
 
         #echo "CONFIG_FIRMWARE_INCLUDE_V2RAYA=n" >> .config #v2raya 已删除 /trunk/user/httpd/common.h
         #echo "CONFIG_FIRMWARE_INCLUDE_NVPPROXY=n" >> .config #NVPPROXY 已删除 请查看/trunk/user/httpd/common.h
-        ##科学上网## 已删除 /trunk/user/httpd/common.h
-        #echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config #SS plus+ 科学上网插件
+        ##科学上网##
+        echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=y" >> .config #SS plus+ 科学上网插件
+        echo "CONFIG_FIRMWARE_INCLUDE_SINGBOX=y" >> .config #集成 sing-box 核心
         #echo "CONFIG_FIRMWARE_INCLUDE_V2RAY=n" >> .config #无需集成会在线下载
         #echo "CONFIG_FIRMWARE_INCLUDE_XRAY=n" >> .config #无需集成会在线下载
         #echo "CONFIG_FIRMWARE_INCLUDE_TROJAN=n" >> .config #无需集成会在线下载

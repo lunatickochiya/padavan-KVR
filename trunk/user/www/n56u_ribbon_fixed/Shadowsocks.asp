@@ -181,6 +181,18 @@
 			return true;
 		}
 		function switch_ss_type() {
+			for (var i = 0; i < document.form.v2_tls.options.length; i++) {
+				document.form.v2_tls.options[i].disabled = false;
+			}
+			for (var i = 0; i < document.form.v2_flow.options.length; i++) {
+				document.form.v2_flow.options[i].disabled = false;
+			}
+			showhide_div('row_singbox_protocol', 0);
+			showhide_div('row_singbox_up_mbps', 0);
+			showhide_div('row_singbox_down_mbps', 0);
+			showhide_div('row_singbox_obfs', 0);
+			showhide_div('row_singbox_obfs_password', 0);
+			showhide_div('row_singbox_congestion', 0);
 			showhide_div('row_quic_header', 0);
 			showhide_div('row_quic_key', 0);
 			showhide_div('row_quic_security', 0);
@@ -251,8 +263,73 @@
 				showhide_div('row_v2_mux', 1);
 				showhide_div('row_tj_tls_host', 1);
 				showhide_div('row_ssp_insecure', 1);
+			} else if (b == "singbox") {
+				showhide_div('row_singbox_protocol', 1);
+				switch_singbox_protocol();
 			} else if (b == "socks5") {
 				showhide_div('row_s5_enable', 1);
+				showhide_div('row_s5_username', 1);
+				showhide_div('row_s5_password', 1);
+			}
+		}
+		function switch_singbox_protocol() {
+			var protocol = document.form.singbox_protocol.value;
+			for (var i = 0; i < document.form.v2_tls.options.length; i++) {
+				if (document.form.v2_tls.options[i].value == "2") {
+					document.form.v2_tls.options[i].disabled = true;
+				}
+			}
+			if (document.form.v2_tls.value == "2") document.form.v2_tls.value = "1";
+			for (var i = 0; i < document.form.v2_flow.options.length; i++) {
+				var flow = document.form.v2_flow.options[i].value;
+				if (flow == "1" || flow == "2") document.form.v2_flow.options[i].disabled = true;
+			}
+			if (document.form.v2_flow.value == "1" || document.form.v2_flow.value == "2") {
+				document.form.v2_flow.value = "0";
+			}
+			if (protocol == "shadowsocks") {
+				showhide_div('row_ss_password', 1);
+				showhide_div('row_ss_method', 1);
+				showhide_div('row_ss_plugin', 1);
+				showhide_div('row_ss_plugin_opts', 1);
+			} else if (protocol == "vmess" || protocol == "vless" || protocol == "trojan") {
+				if (document.form.v2_transport.value == "kcp") {
+					document.form.v2_transport.value = "tcp";
+				}
+				if (protocol == "vless" && document.form.v2_flow.value == "xtls-rprx-vision") {
+					document.form.v2_tls.value = "1";
+				}
+				switch_v2_type();
+				showhide_div('row_v2_vid', protocol != "trojan");
+				showhide_div('row_v2_aid', protocol == "vmess");
+				showhide_div('row_v2_security', protocol == "vmess");
+				showhide_div('row_v2_flow', protocol == "vless");
+				showhide_div('row_ss_password', protocol == "trojan");
+				showhide_div('row_v2_net', 1);
+				showhide_div('row_v2_type', 1);
+				showhide_div('row_v2_tls', protocol != "trojan");
+				showhide_div('row_v2_mux', protocol != "vless" || document.form.v2_flow.value == "0");
+				showhide_div('row_tj_tls_host', 1);
+				showhide_div('row_ssp_insecure', 1);
+			} else if (protocol == "hysteria2") {
+				showhide_div('row_ss_password', 1);
+				showhide_div('row_tj_tls_host', 1);
+				showhide_div('row_ssp_insecure', 1);
+				showhide_div('row_singbox_up_mbps', 1);
+				showhide_div('row_singbox_down_mbps', 1);
+				showhide_div('row_singbox_obfs', 1);
+				showhide_div('row_singbox_obfs_password', 1);
+			} else if (protocol == "tuic") {
+				showhide_div('row_v2_vid', 1);
+				showhide_div('row_ss_password', 1);
+				showhide_div('row_tj_tls_host', 1);
+				showhide_div('row_ssp_insecure', 1);
+				showhide_div('row_singbox_congestion', 1);
+			} else if (protocol == "anytls") {
+				showhide_div('row_ss_password', 1);
+				showhide_div('row_tj_tls_host', 1);
+				showhide_div('row_ssp_insecure', 1);
+			} else if (protocol == "socks") {
 				showhide_div('row_s5_username', 1);
 				showhide_div('row_s5_password', 1);
 			}
@@ -577,6 +654,7 @@
 				}, {
 					field: 'type',
 					title: '类型',
+					formatter: typeFormatter,
 					align: 'center',
 					valign: 'middle',
 					width: '10px'
@@ -663,6 +741,12 @@
 			}
 			return result;
 		}
+		function typeFormatter(value, row) {
+			if (value == "singbox") {
+				return "sing-box/" + (row.singbox_protocol || "shadowsocks");
+			}
+			return value;
+		}
 		function actionFormatter(value, row, index) {
 			return [
 				'<a class="edit_ss" href="javascript:void(0)" title="编辑">编辑</a>',
@@ -694,6 +778,12 @@
 			document.getElementById('ssp_server').value = '';
 			document.getElementById('ssp_prot').value = '';
 			document.getElementById("ss_password").value = '';
+			document.getElementById("singbox_protocol").value = 'shadowsocks';
+			document.getElementById("singbox_up_mbps").value = '';
+			document.getElementById("singbox_down_mbps").value = '';
+			document.getElementById("singbox_obfs").value = '';
+			document.getElementById("singbox_obfs_password").value = '';
+			document.getElementById("singbox_congestion").value = 'cubic';
 			//ssr
 			document.getElementById("ss_method").value = 'rc4-md5';
 			document.getElementById("ss_plugin").value = '';
@@ -762,8 +852,21 @@
 				document.getElementById("ss_method").value = getProperty(ss, 'encrypt_method', 'none');
 				document.getElementById("ss_obfs").value = getProperty(ss, 'obfs', 'plain');
 				document.getElementById("ss_obfs_param").value = getProperty(ss, 'obfs_param', '');
-			} else if (type == "v2ray" || type == "xray") {
+			} else if (type == "v2ray" || type == "xray" || type == "singbox") {
 				var transport = getProperty(ss, 'transport', 'tcp');
+				if (type == "singbox") {
+					document.getElementById("singbox_protocol").value = getProperty(ss, 'singbox_protocol', 'shadowsocks');
+					document.getElementById("singbox_up_mbps").value = getProperty(ss, 'singbox_up_mbps', '');
+					document.getElementById("singbox_down_mbps").value = getProperty(ss, 'singbox_down_mbps', '');
+					document.getElementById("singbox_obfs").value = getProperty(ss, 'singbox_obfs', '');
+					document.getElementById("singbox_obfs_password").value = getProperty(ss, 'singbox_obfs_password', '');
+					document.getElementById("singbox_congestion").value = getProperty(ss, 'singbox_congestion', 'cubic');
+					document.getElementById("ss_method").value = getProperty(ss, 'encrypt_method_ss', 'aes-128-gcm');
+					document.getElementById("ss_plugin").value = getProperty(ss, 'plugin', '');
+					document.getElementById("ss_plugin_opts").value = getProperty(ss, 'plugin_opts', '');
+					document.getElementById("s5_username").value = getProperty(ss, 'server_user', '');
+					document.getElementById("s5_password").value = getProperty(ss, 'server_pwd', '');
+				}
 				document.getElementById("ssp_insecure").value = getProperty(ss, 'insecure', 0);
 				document.getElementById("ssp_insecure").checked = document.getElementById("ssp_insecure").value != 0;
 				document.getElementById("v2_mux").value = getProperty(ss, 'mux', 0);
@@ -805,7 +908,8 @@
 				//document.getElementById("v2_tls").checked = document.getElementById("v2_tls") != 0;
 				document.getElementById("ssp_tls_host").value = getProperty(ss, 'tls_host', '');
 			} else if (type == "socks5") {
-				//
+				document.getElementById("s5_username").value = getProperty(ss, 'server_user', '');
+				document.getElementById("s5_password").value = getProperty(ss, 'server_pwd', '');
 			}
 			switch_ss_type();
 			$j("#vpnc_settings").fadeIn(200);
@@ -1331,6 +1435,42 @@
 					obfs: document.getElementById("ss_obfs").value,
 					obfs_param: document.getElementById("ss_obfs_param").value,
 					password: document.getElementById("ss_password").value,
+					coustom: "1",
+				}
+			} else if (type == "singbox") {
+				var DataObj = {
+					type: "singbox",
+					singbox_protocol: document.getElementById("singbox_protocol").value,
+					alias: document.getElementById("ssp_name").value,
+					server: document.getElementById("ssp_server").value,
+					server_port: document.getElementById("ssp_prot").value,
+					password: document.getElementById("ss_password").value,
+					encrypt_method_ss: document.getElementById("ss_method").value,
+					plugin: document.getElementById("ss_plugin").value,
+					plugin_opts: document.getElementById("ss_plugin_opts").value,
+					server_user: document.getElementById("s5_username").value,
+					server_pwd: document.getElementById("s5_password").value,
+					insecure: document.getElementById("ssp_insecure").value,
+					mux: document.getElementById("v2_mux").value,
+					security: document.getElementById("v2_security").value,
+					vmess_id: document.getElementById("v2_vmess_id").value,
+					alter_id: document.getElementById("v2_alter_id").value,
+					transport: document.getElementById("v2_transport").value,
+					tcp_guise: document.getElementById("v2_tcp_guise").value,
+					http_host: document.getElementById("v2_http_host").value,
+					http_path: document.getElementById("v2_http_path").value || '/',
+					ws_host: document.getElementById("v2_ws_host").value,
+					ws_path: document.getElementById("v2_ws_path").value,
+					h2_host: document.getElementById("v2_h2_host").value,
+					h2_path: document.getElementById("v2_h2_path").value,
+					tls: document.getElementById("v2_tls").value,
+					flow: document.getElementById("v2_flow").value,
+					tls_host: document.getElementById("ssp_tls_host").value,
+					singbox_up_mbps: document.getElementById("singbox_up_mbps").value,
+					singbox_down_mbps: document.getElementById("singbox_down_mbps").value,
+					singbox_obfs: document.getElementById("singbox_obfs").value,
+					singbox_obfs_password: document.getElementById("singbox_obfs_password").value,
+					singbox_congestion: document.getElementById("singbox_congestion").value,
 					coustom: "1",
 				}
 			} else if (type == "v2ray" || type == "xray") {
@@ -1974,10 +2114,27 @@
 																	<option value="trojan">Trojan</option>
 																	<option value="v2ray">Vmess</option>
 																	<option value="xray">VLess</option>
+																	<option value="singbox">Sing-box</option>
 																	<option value="socks5">SOCKS5</option>
 																</select>
 															</td>
 														</tr>
+							<tr id="row_singbox_protocol" style="display:none;">
+								<th width="50%">Sing-box 协议</th>
+								<td>
+									<select name="singbox_protocol" id="singbox_protocol" class="input"
+										style="width: 200px;" onchange="switch_ss_type()">
+										<option value="shadowsocks">Shadowsocks</option>
+										<option value="vmess">VMess</option>
+										<option value="vless">VLESS</option>
+										<option value="trojan">Trojan</option>
+										<option value="hysteria2">Hysteria2</option>
+										<option value="tuic">TUIC</option>
+										<option value="anytls">AnyTLS</option>
+										<option value="socks">SOCKS5</option>
+									</select>
+								</td>
+							</tr>
 
 														<tr>
 															<th width="50%">别名:（可选）</th>
@@ -2013,6 +2170,40 @@
 																		class="icon-eye-close"></i></button>
 															</td>
 														</tr>
+							<tr id="row_singbox_up_mbps" style="display:none;">
+								<th width="50%">上行带宽 (Mbps)</th>
+								<td><input type="text" class="input" name="singbox_up_mbps"
+									id="singbox_up_mbps" style="width: 200px" value="" /></td>
+							</tr>
+							<tr id="row_singbox_down_mbps" style="display:none;">
+								<th width="50%">下行带宽 (Mbps)</th>
+								<td><input type="text" class="input" name="singbox_down_mbps"
+									id="singbox_down_mbps" style="width: 200px" value="" /></td>
+							</tr>
+							<tr id="row_singbox_obfs" style="display:none;">
+								<th width="50%">Hysteria2 混淆</th>
+								<td>
+									<select name="singbox_obfs" id="singbox_obfs" class="input" style="width: 200px;">
+										<option value="">未配置</option>
+										<option value="salamander">Salamander</option>
+									</select>
+								</td>
+							</tr>
+							<tr id="row_singbox_obfs_password" style="display:none;">
+								<th width="50%">混淆密码</th>
+								<td><input type="password" class="input" name="singbox_obfs_password"
+									id="singbox_obfs_password" style="width: 200px" value="" /></td>
+							</tr>
+							<tr id="row_singbox_congestion" style="display:none;">
+								<th width="50%">TUIC 拥塞控制</th>
+								<td>
+									<select name="singbox_congestion" id="singbox_congestion" class="input" style="width: 200px;">
+										<option value="cubic">cubic</option>
+										<option value="bbr">bbr</option>
+										<option value="new_reno">new_reno</option>
+									</select>
+								</td>
+							</tr>
 														<tr id="row_ss_method" style="display:none;">
 															<th width="50%">加密方式</th>
 															<td>
@@ -2360,14 +2551,15 @@
 
 															</td>
 														</tr>
-														<tr id="row_v2_flow" style="display:none;">
-															<th>XTLS flow</th>
-															<td>
-																<select name="v2_flow" id="v2_flow" class="input"
-																	style="width: 200px;">
+								<tr id="row_v2_flow" style="display:none;">
+									<th>XTLS flow</th>
+									<td>
+										<select name="v2_flow" id="v2_flow" class="input"
+											style="width: 200px;" onchange="switch_ss_type()">
 																	<option value="0">未配置</option>
 																	<option value="1">xtls-rprx-direct</option>
 																	<option value="2">xtls-rprx-splice</option>
+																	<option value="xtls-rprx-vision">xtls-rprx-vision</option>
 																</select>
 
 															</td>

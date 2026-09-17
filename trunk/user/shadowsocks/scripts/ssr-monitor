@@ -63,17 +63,12 @@ do
 	fi
 	#V2RAY
 	if [ $v2ray_process -gt 0 ] ;then
-		icount=`ps -w  | grep v2ray |grep -v grep| wc -l`
-		if [ $icount -lt $v2ray_process ]  #如果进程挂掉就重启它
+		icount=`pidof v2ray xray sing-box | wc -w`
+		if [ $icount = 0 ]  #如果代理核心进程挂掉就重启服务
 		then
-			logger -t "$NAME" "检测到V2ray进程挂掉，重新启动!"
-			v2ray=/usr/bin/v2ray
-			[ ! -f "$v2ray" ] && v2ray=/etc/storage/bin/v2ray
-			[ ! -f "$v2ray" ] && v2ray=/tmp/v2ray
-			[ ! -f "$v2ray" ] && logger -t "$NAME" "啊？ V2ray 主程序不见了！"
-			killall -q -9 v2ray
-			chmod +x $v2ray
-			$v2ray -config /tmp/v2-redir.json >/dev/null 2>&1 &
+			logger -t "$NAME" "检测到代理核心进程挂掉，重新启动!"
+			/usr/bin/shadowsocks.sh restart
+			exit 0
 		fi   
 	fi
 	#local

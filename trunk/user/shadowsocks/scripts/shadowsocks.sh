@@ -16,6 +16,7 @@ CONFIG_SOCK5_FILE=/tmp/${NAME}_s.json
 CONFIG_KUMASOCKS_FILE=/tmp/kumasocks.toml
 v2_json_file="/tmp/v2-redir.json"
 trojan_json_file="/tmp/tj-redir.json"
+singbox_json_file="/tmp/sing-box-redir.json"
 server_count=0
 redir_tcp=0
 v2ray_enable=0
@@ -125,6 +126,12 @@ find_bin() {
 		
 		fi
 		;;
+	singbox)
+		ret="/usr/bin/sing-box"
+		[ ! -f "$ret" ] && [ -f "/etc/storage/bin/sing-box" ] && ret="/etc/storage/bin/sing-box"
+		[ ! -f "$ret" ] && [ -f "/tmp/sing-box" ] && ret="/tmp/sing-box"
+		[ ! -f "$ret" ] && echo "$(date "+%Y-%m-%d %H:%M:%S") : 未找到sing-box，请集成核心或上传到/etc/storage/bin/sing-box" >>/tmp/ssrplus.log
+		;;
 	trojan) ret="/usr/bin/trojan" 
 		etcbin="/etc/storage/bin/trojan"
 		tmpbin="/tmp/trojan"
@@ -212,6 +219,14 @@ local type=$stype
 		else
 		lua /etc_ro/ss/genxrayconfig.lua $1 tcp 1080 >$v2_json_file
 		sed -i 's/\\//g' $v2_json_file
+		fi
+		;;
+	singbox)
+		v2ray_enable=1
+		if [ "$2" = "1" ]; then
+			lua /etc_ro/ss/gensingboxconfig.lua $1 udp 1080 >/tmp/sing-box-reudp.json
+		else
+			lua /etc_ro/ss/gensingboxconfig.lua $1 tcp 1080 >$singbox_json_file
 		fi
 		;;
 	esac
@@ -345,6 +360,10 @@ start_redir_tcp() {
 		$bin -config $v2_json_file >/dev/null 2>&1 &
 		echo "$(date "+%Y-%m-%d %H:%M:%S") $($bin -version | head -1) 启动成功!" >>/tmp/ssrplus.log
 		;;
+	singbox)
+		$bin run -c $singbox_json_file >/dev/null 2>&1 &
+		echo "$(date "+%Y-%m-%d %H:%M:%S") $($bin version | head -1) 启动成功!" >>/tmp/ssrplus.log
+		;;
 	socks5)
 		for i in $(seq 1 $threads); do
 		lua /etc_ro/ss/gensocks.lua $GLOBAL_SERVER 1080 >/dev/null 2>&1 &
@@ -377,7 +396,11 @@ start_redir_udp() {
 		xray)
 			gen_config_file $UDP_RELAY_SERVER 1
 			$bin -config /tmp/v2-ssr-reudp.json >/dev/null 2>&1 &
-			;;	
+			;;
+		singbox)
+			gen_config_file $UDP_RELAY_SERVER 1
+			$bin run -c /tmp/sing-box-reudp.json >/dev/null 2>&1 &
+			;;
 		trojan)
 			gen_config_file $UDP_RELAY_SERVER 1
 			$bin --config /tmp/trojan-ssr-reudp.json >/dev/null 2>&1 &
@@ -495,6 +518,12 @@ start_local() {
 		$bin -config /tmp/v2-ssr-local.json >/dev/null 2>&1 &
 		echo "$(date "+%Y-%m-%d %H:%M:%S") Global_Socks5:$($bin -version | head -1) Started!" >>/tmp/ssrplus.log
 		;;
+	singbox)
+		lua /etc_ro/ss/gensingboxconfig.lua $local_server tcp 0 $s5_port >/tmp/sing-box-local.json
+		$bin run -c /tmp/sing-box-local.json >/dev/null 2>&1 &
+		echo "$(date "+%Y-%m-%d %H:%M:%S") Global_Socks5:$($bin version | head -1) Started!" >>/tmp/ssrplus.log
+		v2ray_enable=1
+		;;
 	trojan)
 		lua /etc_ro/ss/gentrojanconfig.lua $local_server client $s5_port >/tmp/trojan-ssr-local.json
 		sed -i 's/\\//g' /tmp/trojan-ssr-local.json
@@ -507,7 +536,7 @@ start_local() {
 		echo "$(date "+%Y-%m-%d %H:%M:%S") Global_Socks5:$type Started!" >>/tmp/ssrplus.log
 		;;
 	esac
-	local_enable=1
+	[ "$type" != "singbox" ] && local_enable=1
 	return 0
 }
 
@@ -614,6 +643,18 @@ kill_process() {
 		logger -t "SS" "关闭V2Ray进程..."
 		killall v2ray >/dev/null 2>&1
 		kill -9 "$v2ray_process" >/dev/null 2>&1
+	fi
+	xray_process=$(pidof xray)
+	if [ -n "$xray_process" ]; then
+		logger -t "SS" "关闭Xray进程..."
+		killall xray >/dev/null 2>&1
+		kill -9 "$xray_process" >/dev/null 2>&1
+	fi
+	singbox_process=$(pidof sing-box)
+	if [ -n "$singbox_process" ]; then
+		logger -t "SS" "关闭sing-box进程..."
+		killall sing-box >/dev/null 2>&1
+		kill -9 "$singbox_process" >/dev/null 2>&1
 	fi
 	ssredir=$(pidof ss-redir)
 	if [ -n "$ssredir" ]; then
@@ -729,5 +770,3 @@ reserver)
 	#exit 0
 	;;
 esac
-
-

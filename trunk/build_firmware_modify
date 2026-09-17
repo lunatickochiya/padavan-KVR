@@ -23,7 +23,13 @@ sed -i 's/CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=y/CONFIG_FIRMWARE_INCLUDE_SHADOWSO
 ##以下为插件增减选项,y为集成,n为不集成,请根据自己路由的FLASH大小选择,切勿超大小,不然固件刷入后会无法启动
 ##此插件选项只在本地编译的时候才会生效
 ##科学上网##
-echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config #科学上网插件，选择n后全部有关插件都不集成
+if [ "$1" = "MSG1500-7615" ]; then
+	echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=y" >> .config
+	echo "CONFIG_FIRMWARE_INCLUDE_SINGBOX=y" >> .config
+else
+	echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config #科学上网插件，选择n后全部有关插件都不集成
+	echo "CONFIG_FIRMWARE_INCLUDE_SINGBOX=n" >> .config #集成sing-box执行文件，体积较大，也可手动上传到/etc/storage/bin/sing-box
+fi
 echo "CONFIG_FIRMWARE_INCLUDE_V2RAY=n" >> .config #集成v2ray执行文件，如果不集成，会从网上下载下来执行，不影响正常使用
 echo "CONFIG_FIRMWARE_INCLUDE_XRAY=n" >> .config #集成xray执行文件，可以代替v2ray，大小5M多，如果闪存太小不够还是建议使用v2ray
 echo "CONFIG_FIRMWARE_INCLUDE_TROJAN=n" >> .config #集成trojan执行文件，如果不集成，会从网上下载下来执行，不影响正常使用
