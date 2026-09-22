@@ -24,8 +24,8 @@ sed -i 's/CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=y/CONFIG_FIRMWARE_INCLUDE_SHADOWSO
 ##此插件选项只在本地编译的时候才会生效
 ##科学上网##
 if [ "$1" = "MSG1500-7615" ]; then
-	echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=y" >> .config
-	echo "CONFIG_FIRMWARE_INCLUDE_SINGBOX=y" >> .config
+	echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config
+	echo "CONFIG_FIRMWARE_INCLUDE_SINGBOX=n" >> .config
 else
 	echo "CONFIG_FIRMWARE_INCLUDE_SHADOWSOCKS=n" >> .config #科学上网插件，选择n后全部有关插件都不集成
 	echo "CONFIG_FIRMWARE_INCLUDE_SINGBOX=n" >> .config #集成sing-box执行文件，体积较大，也可手动上传到/etc/storage/bin/sing-box
